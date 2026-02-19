@@ -1,39 +1,64 @@
-import bcrypt from "bcrypt";
+import "@fastify/jwt";
+import fastifyJwt from "@fastify/jwt";
 import fp from "fastify-plugin";
-import { FastifyPluginAsync } from "fastify";
+import {
+  FastifyPluginAsync,
+  FastifyRequest,
+  FastifyReply,
+} from "fastify";
 
 import { env } from "../config/env";
 import { Role } from "shared-types";
 
+interface JwtPayload {
+  id: string;
+  email: string;
+  role: Role;
+}
+
+declare module "@fastify/jwt" {
+  interface FastifyJWT {
+    payload: JwtPayload;
+    user: JwtPayload;
+  }
+}
+
 declare module "fastify" {
   interface FastifyInstance {
     authenticate: any;
-  }
-
-  interface FastifyRequest {
-    user: {
-      id: string;
-      email: string;
-      role: Role;
-    };
+    requireRole: (role: Role) => any;
   }
 }
 
 const authPlugin: FastifyPluginAsync = async (fastify) => {
-  fastify.register(require("@fastify/jwt"), {
+  await fastify.register(fastifyJwt, {
     secret: env.JWT_SECRET,
   });
 
   fastify.decorate(
     "authenticate",
-    async function (request: any, reply: any) {
+    async function (
+      request: FastifyRequest,
+      reply: FastifyReply
+    ) {
       try {
         await request.jwtVerify();
-      } catch (err) {
-        reply.send(err);
+      } catch {
+        return reply.status(401).send({ message: "Unauthorized" });
       }
-    },
+    }
   );
+
+  fastify.decorate("requireRole", function (role: Role) {
+    return async function (
+      request: FastifyRequest,
+      reply: FastifyReply
+    ) {
+      if (request.user.role !== role) {
+        return reply.status(403).send({ message: "Forbidden" });
+      }
+    };
+  });
 };
 
 export default fp(authPlugin);

@@ -4,6 +4,7 @@ import { env } from "./config/env";
 import mongoPlugin from "./plugins/mongo";
 import authPlugin from "./plugins/auth";
 import authRoutes from "./routes/auth";
+import { Role } from "shared-types";
 
 
 
@@ -30,6 +31,19 @@ export async function buildServer() {
     };
   }
 );
+
+    app.get(
+      "/admin",
+      {
+        preHandler: [app.authenticate, app.requireRole(Role.ADMIN)],
+      },
+      async () => {
+        return { message: "Admin only route" 
+
+    };
+  }
+);
+
 
 
   return app;
