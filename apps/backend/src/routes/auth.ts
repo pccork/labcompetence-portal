@@ -8,7 +8,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post("/login", async (request: any, reply) => {
     const { email, password } = request.body;
 
-    const db = fastify.mongo.db();
+    const db = fastify.db;
     const user = await findUserByEmail(db, email);
 
     if (!user) {
@@ -22,7 +22,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const token = fastify.jwt.sign({
-      id: user._id.toString(),
+      id: user.id.toString(),
       email: user.email,
       role: user.role,
     });
