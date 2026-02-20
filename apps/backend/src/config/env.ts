@@ -14,6 +14,6 @@ function getEnv(name: string): string {
 
 export const env = {
   PORT: Number(process.env.PORT ?? 3000),
-  MONGO_URI: getEnv("MONGO_URI"),
+  DATABASE_URL: getEnv("DATABASE_URL"),
   JWT_SECRET: getEnv("JWT_SECRET"),
 };

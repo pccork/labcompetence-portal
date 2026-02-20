@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 
 import { env } from "./config/env";
-import mongoPlugin from "./plugins/mongo";
+import postgresPlugin from "./plugins/postgres";
 import authPlugin from "./plugins/auth";
 import authRoutes from "./routes/auth";
 import { Role } from "shared-types";
@@ -13,7 +13,7 @@ export async function buildServer() {
     logger: true,
   });
 
-  await app.register(mongoPlugin);
+  await app.register(postgresPlugin);
   await app.register(authPlugin);
   await app.register(authRoutes);
 
