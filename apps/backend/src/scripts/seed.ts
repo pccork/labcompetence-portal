@@ -21,6 +21,20 @@ async function seed() {
   );
 
   console.log("Admin seeded (or already exists).");
+  
+  //  Seed labs
+  await pool.query(
+    `
+    INSERT INTO labs (name)
+    VALUES 
+      ('Biochemistry'),
+      ('Immunology')
+    ON CONFLICT (name) DO NOTHING
+    `
+  );
+
+  console.log("Labs seeded (or already exist).");
+  
 
   await pool.end();
 }

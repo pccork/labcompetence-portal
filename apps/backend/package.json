@@ -7,7 +7,9 @@
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "seed": "ts-node src/scripts/seed.ts"
+    "seed": "ts-node src/scripts/seed.ts",
+    "db:init": "bash -lc 'set -a && source .env && set +a && psql \"$DATABASE_URL\" -f db/migrations/001_initial_schema.sql'",
+    "db:check": "bash -lc 'set -a && source .env && set +a && psql \"$DATABASE_URL\" -c \"select current_user, current_database();\"'"
   },
   "keywords": [],
   "author": "",
