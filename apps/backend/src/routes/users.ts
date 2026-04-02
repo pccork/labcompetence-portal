@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from "fastify";
 import { Role } from "shared-types";
 
+import { findHospitalById } from "../services/hospital-service";
 import {
   createUser,
   deleteUser,
@@ -12,6 +13,7 @@ import {
 
 interface CreateUserBody {
   Body: {
+    hospitalId?: number;
     name?: string;
     email?: string;
     password?: string;
@@ -58,10 +60,17 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       ],
     },
     async (request, reply) => {
+      const hospitalId = Number(request.body.hospitalId);
       const name = request.body.name?.trim();
       const email = request.body.email?.trim().toLowerCase();
       const password = request.body.password?.trim();
       const role = request.body.role?.trim().toLowerCase();
+
+      if (!Number.isInteger(hospitalId) || hospitalId <= 0) {
+        return reply
+          .status(400)
+          .send({ message: "Valid hospitalId is required" });
+      }
 
       if (!name) {
         return reply.status(400).send({ message: "Name is required" });
@@ -79,9 +88,16 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(400).send({ message: "Valid role is required" });
       }
 
+      const hospital = await findHospitalById(fastify.db, hospitalId);
+
+      if (!hospital) {
+        return reply.status(404).send({ message: "Hospital not found" });
+      }
+
       try {
         const user = await createUser(
           fastify.db,
+          hospitalId,
           name,
           email,
           password,
@@ -136,12 +152,19 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const userId = Number(request.params.id);
+      const hospitalId = Number(request.body.hospitalId);
       const name = request.body.name?.trim();
       const email = request.body.email?.trim().toLowerCase();
       const role = request.body.role?.trim().toLowerCase();
 
       if (!Number.isInteger(userId) || userId <= 0) {
         return reply.status(400).send({ message: "Invalid user id" });
+      }
+
+      if (!Number.isInteger(hospitalId) || hospitalId <= 0) {
+        return reply
+          .status(400)
+          .send({ message: "Valid hospitalId is required" });
       }
 
       if (!name) {
@@ -156,10 +179,17 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(400).send({ message: "Valid role is required" });
       }
 
+      const hospital = await findHospitalById(fastify.db, hospitalId);
+
+      if (!hospital) {
+        return reply.status(404).send({ message: "Hospital not found" });
+      }
+
       try {
         const user = await updateUser(
           fastify.db,
           userId,
+          hospitalId,
           name,
           email,
           role as Role

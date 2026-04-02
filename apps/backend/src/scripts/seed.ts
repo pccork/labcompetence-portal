@@ -11,13 +11,29 @@ const pool = new Pool({
 async function seed() {
   const password = await bcrypt.hash("password123", 10);
 
+  const hospitalResult = await pool.query<{ id: number }>(
+    `
+    INSERT INTO hospitals (name)
+    VALUES ($1)
+    ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+    RETURNING id
+    `,
+    ["CUH"]
+  );
+
+  const hospitalId = hospitalResult.rows[0]?.id;
+
+  if (!hospitalId) {
+    throw new Error("Failed to seed default hospital");
+  }
+
   await pool.query(
     `
-    INSERT INTO users (name, email, password, role)
-    VALUES ($1, $2, $3, $4)
+    INSERT INTO users (hospital_id, name, email, password, role)
+    VALUES ($1, $2, $3, $4, $5)
     ON CONFLICT (email) DO NOTHING
     `,
-    ["Portal Admin", "admin@test.com", password, "admin"]
+    [hospitalId, "Portal Admin", "admin@test.com", password, "admin"]
   );
 
   console.log("Admin seeded (or already exists).");
@@ -25,12 +41,14 @@ async function seed() {
   //  Seed labs
   await pool.query(
     `
-    INSERT INTO labs (name)
+    INSERT INTO labs (hospital_id, name, is_poc)
     VALUES 
-      ('Biochemistry'),
-      ('Immunology')
-    ON CONFLICT (name) DO NOTHING
-    `
+      ($1, 'Biochemistry', false),
+      ($1, 'Immunology', false),
+      ($1, 'Point of Care', true)
+    ON CONFLICT (hospital_id, name) DO NOTHING
+    `,
+    [hospitalId]
   );
 
   console.log("Labs seeded (or already exist).");

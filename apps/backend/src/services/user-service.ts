@@ -4,6 +4,7 @@ import { Role } from "shared-types";
 
 export interface User {
   id?: number;
+  hospital_id: number;
   name: string;
   email: string;
   password: string;
@@ -12,6 +13,8 @@ export interface User {
 
 export interface SafeUser {
   id: number;
+  hospital_id: number;
+  hospital_name: string;
   name: string;
   email: string;
   role: Role;
@@ -20,6 +23,7 @@ export interface SafeUser {
 
 export async function createUser(
   db: Pool,
+  hospitalId: number,
   name: string,
   email: string,
   password: string,
@@ -29,11 +33,23 @@ export async function createUser(
 
   const result = await db.query<SafeUser>(
     `
-    INSERT INTO users (name, email, password, role)
-    VALUES ($1, $2, $3, $4)
-    RETURNING id, name, email, role, created_at
+    WITH inserted_user AS (
+      INSERT INTO users (hospital_id, name, email, password, role)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, hospital_id, name, email, role, created_at
+    )
+    SELECT
+      inserted_user.id,
+      inserted_user.hospital_id,
+      h.name AS hospital_name,
+      inserted_user.name,
+      inserted_user.email,
+      inserted_user.role,
+      inserted_user.created_at
+    FROM inserted_user
+    INNER JOIN hospitals h ON h.id = inserted_user.hospital_id
     `,
-    [name, email, hashed, role]
+    [hospitalId, name, email, hashed, role]
   );
 
   return result.rows[0];
@@ -50,7 +66,19 @@ export async function findUserByEmail(db: Pool, email: string) {
 
 export async function findUserById(db: Pool, id: number) {
   const result = await db.query<SafeUser>(
-    "SELECT id, name, email, role, created_at FROM users WHERE id = $1",
+    `
+    SELECT
+      u.id,
+      u.hospital_id,
+      h.name AS hospital_name,
+      u.name,
+      u.email,
+      u.role,
+      u.created_at
+    FROM users u
+    INNER JOIN hospitals h ON h.id = u.hospital_id
+    WHERE u.id = $1
+    `,
     [id]
   );
 
@@ -59,7 +87,19 @@ export async function findUserById(db: Pool, id: number) {
 
 export async function listUsers(db: Pool) {
   const result = await db.query<SafeUser>(
-    "SELECT id, name, email, role, created_at FROM users ORDER BY created_at ASC"
+    `
+    SELECT
+      u.id,
+      u.hospital_id,
+      h.name AS hospital_name,
+      u.name,
+      u.email,
+      u.role,
+      u.created_at
+    FROM users u
+    INNER JOIN hospitals h ON h.id = u.hospital_id
+    ORDER BY h.name ASC, u.name ASC
+    `
   );
 
   return result.rows;
@@ -68,18 +108,31 @@ export async function listUsers(db: Pool) {
 export async function updateUser(
   db: Pool,
   id: number,
+  hospitalId: number,
   name: string,
   email: string,
   role: Role
 ) {
   const result = await db.query<SafeUser>(
     `
-    UPDATE users
-    SET name = $2, email = $3, role = $4
-    WHERE id = $1
-    RETURNING id, name, email, role, created_at
+    WITH updated_user AS (
+      UPDATE users
+      SET hospital_id = $2, name = $3, email = $4, role = $5
+      WHERE id = $1
+      RETURNING id, hospital_id, name, email, role, created_at
+    )
+    SELECT
+      updated_user.id,
+      updated_user.hospital_id,
+      h.name AS hospital_name,
+      updated_user.name,
+      updated_user.email,
+      updated_user.role,
+      updated_user.created_at
+    FROM updated_user
+    INNER JOIN hospitals h ON h.id = updated_user.hospital_id
     `,
-    [id, name, email, role]
+    [id, hospitalId, name, email, role]
   );
 
   return result.rows[0];
@@ -88,9 +141,21 @@ export async function updateUser(
 export async function deleteUser(db: Pool, id: number) {
   const result = await db.query<SafeUser>(
     `
-    DELETE FROM users
-    WHERE id = $1
-    RETURNING id, name, email, role, created_at
+    WITH deleted_user AS (
+      DELETE FROM users
+      WHERE id = $1
+      RETURNING id, hospital_id, name, email, role, created_at
+    )
+    SELECT
+      deleted_user.id,
+      deleted_user.hospital_id,
+      h.name AS hospital_name,
+      deleted_user.name,
+      deleted_user.email,
+      deleted_user.role,
+      deleted_user.created_at
+    FROM deleted_user
+    INNER JOIN hospitals h ON h.id = deleted_user.hospital_id
     `,
     [id]
   );
@@ -107,10 +172,22 @@ export async function updateUserPassword(
 
   const result = await db.query<SafeUser>(
     `
-    UPDATE users
-    SET password = $2
-    WHERE id = $1
-    RETURNING id, name, email, role, created_at
+    WITH updated_user AS (
+      UPDATE users
+      SET password = $2
+      WHERE id = $1
+      RETURNING id, hospital_id, name, email, role, created_at
+    )
+    SELECT
+      updated_user.id,
+      updated_user.hospital_id,
+      h.name AS hospital_name,
+      updated_user.name,
+      updated_user.email,
+      updated_user.role,
+      updated_user.created_at
+    FROM updated_user
+    INNER JOIN hospitals h ON h.id = updated_user.hospital_id
     `,
     [id, hashed]
   );

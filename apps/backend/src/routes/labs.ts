@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from "fastify";
 import { Role } from "shared-types";
 
+import { findHospitalById } from "../services/hospital-service";
 import {
   createLab,
   deleteLab,
@@ -10,7 +11,9 @@ import {
 
 interface CreateLabBody {
   Body: {
+    hospitalId?: number;
     name?: string;
+    isPoc?: boolean;
   };
 }
 
@@ -36,14 +39,33 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
       ],
     },
     async (request, reply) => {
+      const hospitalId = Number(request.body?.hospitalId);
       const name = request.body?.name?.trim();
+      const isPoc = request.body?.isPoc ?? false;
+
+      if (!Number.isInteger(hospitalId) || hospitalId <= 0) {
+        return reply
+          .status(400)
+          .send({ message: "Valid hospitalId is required" });
+      }
 
       if (!name) {
         return reply.status(400).send({ message: "Lab name is required" });
       }
 
+      const hospital = await findHospitalById(fastify.db, hospitalId);
+
+      if (!hospital) {
+        return reply.status(404).send({ message: "Hospital not found" });
+      }
+
       try {
-        const lab = await createLab(fastify.db, name);
+        const lab = await createLab(
+          fastify.db,
+          hospitalId,
+          name,
+          isPoc
+        );
 
         return reply.status(201).send({ lab });
       } catch (error: any) {
@@ -68,18 +90,38 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const labId = Number(request.params.id);
+      const hospitalId = Number(request.body?.hospitalId);
       const name = request.body?.name?.trim();
+      const isPoc = request.body?.isPoc ?? false;
 
       if (!Number.isInteger(labId) || labId <= 0) {
         return reply.status(400).send({ message: "Invalid lab id" });
+      }
+
+      if (!Number.isInteger(hospitalId) || hospitalId <= 0) {
+        return reply
+          .status(400)
+          .send({ message: "Valid hospitalId is required" });
       }
 
       if (!name) {
         return reply.status(400).send({ message: "Lab name is required" });
       }
 
+      const hospital = await findHospitalById(fastify.db, hospitalId);
+
+      if (!hospital) {
+        return reply.status(404).send({ message: "Hospital not found" });
+      }
+
       try {
-        const lab = await updateLab(fastify.db, labId, name);
+        const lab = await updateLab(
+          fastify.db,
+          labId,
+          hospitalId,
+          name,
+          isPoc
+        );
 
         if (!lab) {
           return reply.status(404).send({ message: "Lab not found" });

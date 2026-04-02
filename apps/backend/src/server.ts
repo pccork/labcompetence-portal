@@ -4,6 +4,7 @@ import { env } from "./config/env";
 import postgresPlugin from "./plugins/postgres";
 import authPlugin from "./plugins/auth";
 import authRoutes from "./routes/auth";
+import hospitalRoutes from "./routes/hospitals";
 import labRoutes from "./routes/labs";
 import trainingRecordRoutes from "./routes/training-records";
 import userLabRoutes from "./routes/user-labs";
@@ -20,6 +21,7 @@ export async function buildServer() {
   await app.register(postgresPlugin);
   await app.register(authPlugin);
   await app.register(authRoutes);
+  await app.register(hospitalRoutes);
   await app.register(userRoutes);
   await app.register(labRoutes);
   await app.register(trainingRecordRoutes);

@@ -5,11 +5,18 @@ import { Lab } from "./lab-service";
 export async function listLabsForUser(db: Pool, userId: number) {
   const result = await db.query<Lab>(
     `
-    SELECT l.id, l.name, l.created_at
+    SELECT
+      l.id,
+      l.hospital_id,
+      h.name AS hospital_name,
+      l.name,
+      l.is_poc,
+      l.created_at
     FROM labs l
+    INNER JOIN hospitals h ON h.id = l.hospital_id
     INNER JOIN user_labs ul ON ul.lab_id = l.id
     WHERE ul.user_id = $1
-    ORDER BY l.name ASC
+    ORDER BY h.name ASC, l.name ASC
     `,
     [userId]
   );
