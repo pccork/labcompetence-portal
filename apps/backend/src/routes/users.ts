@@ -60,7 +60,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
 
       const users = await listUsers(
         fastify.db,
-        scope.canAccessAllHospitals ? undefined : scope.homeHospitalId
+        scope.homeHospitalId
       );
 
       return { users };

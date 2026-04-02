@@ -49,7 +49,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
 
       const labs = await listLabs(
         fastify.db,
-        scope.canAccessAllHospitals ? undefined : scope.homeHospitalId
+        scope.homeHospitalId
       );
 
       return { labs };

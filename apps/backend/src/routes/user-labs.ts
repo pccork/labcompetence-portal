@@ -113,7 +113,7 @@ const userLabRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (
         !canAccessHospital(scope, user.hospital_id) ||
-        !canAccessHospital(scope, lab.hospital_id)
+        !canAccessHospital(scope, lab.hospital_id, lab.is_poc)
       ) {
         return reply.status(403).send({
           message: "You cannot assign users across this hospital boundary",
@@ -184,7 +184,7 @@ const userLabRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (
         !canAccessHospital(scope, user.hospital_id) ||
-        !canAccessHospital(scope, lab.hospital_id)
+        !canAccessHospital(scope, lab.hospital_id, lab.is_poc)
       ) {
         return reply.status(403).send({
           message: "You cannot remove assignments across this hospital boundary",

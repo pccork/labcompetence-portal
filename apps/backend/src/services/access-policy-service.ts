@@ -4,7 +4,7 @@ import { findUserById } from "./user-service";
 
 export interface HospitalAccessScope {
   homeHospitalId: number;
-  canAccessAllHospitals: boolean;
+  canAccessCrossHospitalPoc: boolean;
 }
 
 export async function getHospitalAccessScope(
@@ -32,14 +32,18 @@ export async function getHospitalAccessScope(
 
   return {
     homeHospitalId: requester.hospital_id,
-    canAccessAllHospitals:
+    canAccessCrossHospitalPoc:
       pocAccessResult.rows[0]?.has_poc_access ?? false,
   };
 }
 
 export function canAccessHospital(
   scope: HospitalAccessScope,
-  hospitalId: number
+  hospitalId: number,
+  targetIsPoc = false
 ) {
-  return scope.canAccessAllHospitals || scope.homeHospitalId === hospitalId;
+  return (
+    scope.homeHospitalId === hospitalId ||
+    (targetIsPoc && scope.canAccessCrossHospitalPoc)
+  );
 }

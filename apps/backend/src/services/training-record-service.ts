@@ -61,7 +61,8 @@ export async function findTemplateVersionHospitalScopeById(
 
 export async function listTrainingRecords(
   db: Pool,
-  hospitalId?: number
+  hospitalId: number,
+  includeCrossHospitalPoc = false
 ) {
   const result = await db.query<TrainingRecordSummary>(
     `
@@ -92,10 +93,13 @@ export async function listTrainingRecords(
     INNER JOIN templates t ON t.id = tv.template_id
     INNER JOIN labs template_lab ON template_lab.id = t.lab_id
     INNER JOIN hospitals lab_hospital ON lab_hospital.id = template_lab.hospital_id
-    WHERE ($1::int IS NULL OR template_lab.hospital_id = $1)
+    WHERE (
+      template_lab.hospital_id = $1
+      OR ($2 = true AND template_lab.is_poc = true)
+    )
     ORDER BY tr.expires_at ASC, tr.created_at DESC
     `,
-    [hospitalId ?? null]
+    [hospitalId, includeCrossHospitalPoc]
   );
 
   return result.rows;
@@ -169,7 +173,8 @@ export async function findTrainingRecordById(db: Pool, id: number) {
 export async function listTrainingRecordsExpiringWithinDays(
   db: Pool,
   days: number,
-  hospitalId?: number
+  hospitalId: number,
+  includeCrossHospitalPoc = false
 ) {
   const result = await db.query<TrainingRecordSummary>(
     `
@@ -202,10 +207,13 @@ export async function listTrainingRecordsExpiringWithinDays(
     INNER JOIN hospitals lab_hospital ON lab_hospital.id = template_lab.hospital_id
     WHERE tr.expires_at >= NOW()
       AND tr.expires_at <= NOW() + ($1::text || ' days')::interval
-      AND ($2::int IS NULL OR template_lab.hospital_id = $2)
+      AND (
+        template_lab.hospital_id = $2
+        OR ($3 = true AND template_lab.is_poc = true)
+      )
     ORDER BY tr.expires_at ASC
     `,
-    [days, hospitalId ?? null]
+    [days, hospitalId, includeCrossHospitalPoc]
   );
 
   return result.rows;

@@ -61,7 +61,8 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
 
       const records = await listTrainingRecords(
         fastify.db,
-        scope.canAccessAllHospitals ? undefined : scope.homeHospitalId
+        scope.homeHospitalId,
+        scope.canAccessCrossHospitalPoc
       );
 
       return { records };
@@ -98,7 +99,13 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ message: "User not found" });
       }
 
-      if (!canAccessHospital(scope, record.lab_hospital_id)) {
+      if (
+        !canAccessHospital(
+          scope,
+          record.lab_hospital_id,
+          record.lab_is_poc
+        )
+      ) {
         return reply.status(403).send({
           message: "You cannot access this training record's hospital",
         });
@@ -171,7 +178,11 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (
         !canAccessHospital(scope, trainee.hospital_id) ||
-        !canAccessHospital(scope, templateVersionScope.hospital_id)
+        !canAccessHospital(
+          scope,
+          templateVersionScope.hospital_id,
+          templateVersionScope.is_poc
+        )
       ) {
         return reply.status(403).send({
           message: "You cannot create training records across this hospital boundary",
@@ -235,7 +246,8 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
       const records = await listTrainingRecordsExpiringWithinDays(
         fastify.db,
         days,
-        scope.canAccessAllHospitals ? undefined : scope.homeHospitalId
+        scope.homeHospitalId,
+        scope.canAccessCrossHospitalPoc
       );
 
       return { records };
