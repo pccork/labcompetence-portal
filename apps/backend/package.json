@@ -8,7 +8,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "seed": "ts-node src/scripts/seed.ts",
-    "db:init": "bash -lc 'set -a && source .env && set +a && psql \"$DATABASE_URL\" -f db/migrations/001_initial_schema.sql'",
+    "db:init": "bash -lc 'set -a && source .env && set +a && for file in $(find db/migrations -maxdepth 1 -type f -name \"*.sql\" | sort); do psql \"$DATABASE_URL\" -f \"$file\"; done'",
     "db:check": "bash -lc 'set -a && source .env && set +a && psql \"$DATABASE_URL\" -c \"select current_user, current_database();\"'"
   },
   "keywords": [],

@@ -12,6 +12,7 @@ import {
 
 interface CreateUserBody {
   Body: {
+    name?: string;
     email?: string;
     password?: string;
     role?: string;
@@ -57,9 +58,14 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       ],
     },
     async (request, reply) => {
+      const name = request.body.name?.trim();
       const email = request.body.email?.trim().toLowerCase();
       const password = request.body.password?.trim();
       const role = request.body.role?.trim().toLowerCase();
+
+      if (!name) {
+        return reply.status(400).send({ message: "Name is required" });
+      }
 
       if (!email) {
         return reply.status(400).send({ message: "Email is required" });
@@ -76,6 +82,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const user = await createUser(
           fastify.db,
+          name,
           email,
           password,
           role as Role
@@ -129,11 +136,16 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const userId = Number(request.params.id);
+      const name = request.body.name?.trim();
       const email = request.body.email?.trim().toLowerCase();
       const role = request.body.role?.trim().toLowerCase();
 
       if (!Number.isInteger(userId) || userId <= 0) {
         return reply.status(400).send({ message: "Invalid user id" });
+      }
+
+      if (!name) {
+        return reply.status(400).send({ message: "Name is required" });
       }
 
       if (!email) {
@@ -148,6 +160,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         const user = await updateUser(
           fastify.db,
           userId,
+          name,
           email,
           role as Role
         );

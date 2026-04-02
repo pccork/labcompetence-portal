@@ -4,6 +4,7 @@ import { Role } from "shared-types";
 
 export interface User {
   id?: number;
+  name: string;
   email: string;
   password: string;
   role: Role;
@@ -11,6 +12,7 @@ export interface User {
 
 export interface SafeUser {
   id: number;
+  name: string;
   email: string;
   role: Role;
   created_at: Date;
@@ -18,6 +20,7 @@ export interface SafeUser {
 
 export async function createUser(
   db: Pool,
+  name: string,
   email: string,
   password: string,
   role: Role
@@ -26,11 +29,11 @@ export async function createUser(
 
   const result = await db.query<SafeUser>(
     `
-    INSERT INTO users (email, password, role)
-    VALUES ($1, $2, $3)
-    RETURNING id, email, role, created_at
+    INSERT INTO users (name, email, password, role)
+    VALUES ($1, $2, $3, $4)
+    RETURNING id, name, email, role, created_at
     `,
-    [email, hashed, role]
+    [name, email, hashed, role]
   );
 
   return result.rows[0];
@@ -47,7 +50,7 @@ export async function findUserByEmail(db: Pool, email: string) {
 
 export async function findUserById(db: Pool, id: number) {
   const result = await db.query<SafeUser>(
-    "SELECT id, email, role, created_at FROM users WHERE id = $1",
+    "SELECT id, name, email, role, created_at FROM users WHERE id = $1",
     [id]
   );
 
@@ -56,7 +59,7 @@ export async function findUserById(db: Pool, id: number) {
 
 export async function listUsers(db: Pool) {
   const result = await db.query<SafeUser>(
-    "SELECT id, email, role, created_at FROM users ORDER BY created_at ASC"
+    "SELECT id, name, email, role, created_at FROM users ORDER BY created_at ASC"
   );
 
   return result.rows;
@@ -65,17 +68,18 @@ export async function listUsers(db: Pool) {
 export async function updateUser(
   db: Pool,
   id: number,
+  name: string,
   email: string,
   role: Role
 ) {
   const result = await db.query<SafeUser>(
     `
     UPDATE users
-    SET email = $2, role = $3
+    SET name = $2, email = $3, role = $4
     WHERE id = $1
-    RETURNING id, email, role, created_at
+    RETURNING id, name, email, role, created_at
     `,
-    [id, email, role]
+    [id, name, email, role]
   );
 
   return result.rows[0];
@@ -86,7 +90,7 @@ export async function deleteUser(db: Pool, id: number) {
     `
     DELETE FROM users
     WHERE id = $1
-    RETURNING id, email, role, created_at
+    RETURNING id, name, email, role, created_at
     `,
     [id]
   );
@@ -106,7 +110,7 @@ export async function updateUserPassword(
     UPDATE users
     SET password = $2
     WHERE id = $1
-    RETURNING id, email, role, created_at
+    RETURNING id, name, email, role, created_at
     `,
     [id, hashed]
   );
