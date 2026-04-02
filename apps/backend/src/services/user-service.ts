@@ -1,5 +1,8 @@
 import bcrypt from "bcrypt";
-import { Pool } from "pg";
+import {
+  Pool,
+  PoolClient,
+} from "pg";
 import { Role } from "shared-types";
 
 export interface User {
@@ -22,7 +25,7 @@ export interface SafeUser {
 }
 
 export async function createUser(
-  db: Pool,
+  db: Pool | PoolClient,
   hospitalId: number,
   name: string,
   email: string,

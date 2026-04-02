@@ -6,6 +6,7 @@ import authPlugin from "./plugins/auth";
 import authRoutes from "./routes/auth";
 import hospitalRoutes from "./routes/hospitals";
 import labRoutes from "./routes/labs";
+import pocRegistrationRoutes from "./routes/poc-registration";
 import trainingRecordRoutes from "./routes/training-records";
 import userLabRoutes from "./routes/user-labs";
 import userRoutes from "./routes/users";
@@ -24,6 +25,7 @@ export async function buildServer() {
   await app.register(hospitalRoutes);
   await app.register(userRoutes);
   await app.register(labRoutes);
+  await app.register(pocRegistrationRoutes);
   await app.register(trainingRecordRoutes);
   await app.register(userLabRoutes);
 

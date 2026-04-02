@@ -10,3 +10,9 @@ export enum AssignmentStatus {
   SIGNEDOFF = "signedoff",
   EXPIRED = "expired",
 }
+
+export enum PocTrainingRequestStatus {
+  PENDING_TRAINER_REPLY = "pending_trainer_reply",
+  SCHEDULED = "scheduled",
+  CANCELLED = "cancelled",
+}
