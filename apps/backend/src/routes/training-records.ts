@@ -4,10 +4,15 @@ import {
   Role,
 } from "shared-types";
 
+import {
+  canAccessHospital,
+  getHospitalAccessScope,
+} from "../services/access-policy-service";
 import { findUserById } from "../services/user-service";
 import {
   createTrainingRecord,
   findTrainingRecordById,
+  findTemplateVersionHospitalScopeById,
   listTrainingRecords,
   listTrainingRecordsExpiringWithinDays,
 } from "../services/training-record-service";
@@ -44,8 +49,20 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.requireRole(Role.ADMIN),
       ],
     },
-    async () => {
-      const records = await listTrainingRecords(fastify.db);
+    async (request, reply) => {
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id)
+      );
+
+      if (!scope) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      const records = await listTrainingRecords(
+        fastify.db,
+        scope.canAccessAllHospitals ? undefined : scope.homeHospitalId
+      );
 
       return { records };
     }
@@ -70,6 +87,21 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!record) {
         return reply.status(404).send({ message: "Training record not found" });
+      }
+
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id)
+      );
+
+      if (!scope) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      if (!canAccessHospital(scope, record.lab_hospital_id)) {
+        return reply.status(403).send({
+          message: "You cannot access this training record's hospital",
+        });
       }
 
       return { record };
@@ -114,6 +146,36 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!trainee) {
         return reply.status(404).send({ message: "Trainee not found" });
+      }
+
+      const templateVersionScope =
+        await findTemplateVersionHospitalScopeById(
+          fastify.db,
+          templateVersionId
+        );
+
+      if (!templateVersionScope) {
+        return reply
+          .status(404)
+          .send({ message: "Template version not found" });
+      }
+
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id)
+      );
+
+      if (!scope) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      if (
+        !canAccessHospital(scope, trainee.hospital_id) ||
+        !canAccessHospital(scope, templateVersionScope.hospital_id)
+      ) {
+        return reply.status(403).send({
+          message: "You cannot create training records across this hospital boundary",
+        });
       }
 
       try {
@@ -161,9 +223,19 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(400).send({ message: "Valid days query is required" });
       }
 
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id)
+      );
+
+      if (!scope) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
       const records = await listTrainingRecordsExpiringWithinDays(
         fastify.db,
-        days
+        days,
+        scope.canAccessAllHospitals ? undefined : scope.homeHospitalId
       );
 
       return { records };

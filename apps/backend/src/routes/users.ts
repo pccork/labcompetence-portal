@@ -1,6 +1,10 @@
 import { FastifyPluginAsync } from "fastify";
 import { Role } from "shared-types";
 
+import {
+  canAccessHospital,
+  getHospitalAccessScope,
+} from "../services/access-policy-service";
 import { findHospitalById } from "../services/hospital-service";
 import {
   createUser,
@@ -44,8 +48,20 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.requireRole(Role.ADMIN),
       ],
     },
-    async () => {
-      const users = await listUsers(fastify.db);
+    async (request, reply) => {
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id)
+      );
+
+      if (!scope) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      const users = await listUsers(
+        fastify.db,
+        scope.canAccessAllHospitals ? undefined : scope.homeHospitalId
+      );
 
       return { users };
     }
@@ -94,6 +110,21 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ message: "Hospital not found" });
       }
 
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id)
+      );
+
+      if (!scope) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      if (!canAccessHospital(scope, hospitalId)) {
+        return reply.status(403).send({
+          message: "You cannot create users for this hospital",
+        });
+      }
+
       try {
         const user = await createUser(
           fastify.db,
@@ -136,6 +167,21 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!user) {
         return reply.status(404).send({ message: "User not found" });
+      }
+
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id)
+      );
+
+      if (!scope) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      if (!canAccessHospital(scope, user.hospital_id)) {
+        return reply.status(403).send({
+          message: "You cannot access this user's hospital",
+        });
       }
 
       return { user };
@@ -185,6 +231,30 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ message: "Hospital not found" });
       }
 
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id)
+      );
+
+      if (!scope) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      const existingUser = await findUserById(fastify.db, userId);
+
+      if (!existingUser) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      if (
+        !canAccessHospital(scope, existingUser.hospital_id) ||
+        !canAccessHospital(scope, hospitalId)
+      ) {
+        return reply.status(403).send({
+          message: "You cannot update users across this hospital boundary",
+        });
+      }
+
       try {
         const user = await updateUser(
           fastify.db,
@@ -228,6 +298,27 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       try {
+        const scope = await getHospitalAccessScope(
+          fastify.db,
+          Number(request.user.id)
+        );
+
+        if (!scope) {
+          return reply.status(404).send({ message: "User not found" });
+        }
+
+        const existingUser = await findUserById(fastify.db, userId);
+
+        if (!existingUser) {
+          return reply.status(404).send({ message: "User not found" });
+        }
+
+        if (!canAccessHospital(scope, existingUser.hospital_id)) {
+          return reply.status(403).send({
+            message: "You cannot delete users from this hospital",
+          });
+        }
+
         const user = await deleteUser(fastify.db, userId);
 
         if (!user) {
@@ -273,15 +364,32 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id)
+      );
+
+      if (!scope) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      const existingUser = await findUserById(fastify.db, userId);
+
+      if (!existingUser) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      if (!canAccessHospital(scope, existingUser.hospital_id)) {
+        return reply.status(403).send({
+          message: "You cannot update passwords for this hospital",
+        });
+      }
+
       const user = await updateUserPassword(
         fastify.db,
         userId,
         password
       );
-
-      if (!user) {
-        return reply.status(404).send({ message: "User not found" });
-      }
 
       return { user };
     }

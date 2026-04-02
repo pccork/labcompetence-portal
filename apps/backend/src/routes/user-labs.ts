@@ -1,6 +1,10 @@
 import { FastifyPluginAsync } from "fastify";
 import { Role } from "shared-types";
 
+import {
+  canAccessHospital,
+  getHospitalAccessScope,
+} from "../services/access-policy-service";
 import { findLabById } from "../services/lab-service";
 import { findUserById } from "../services/user-service";
 import {
@@ -44,6 +48,21 @@ const userLabRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ message: "User not found" });
       }
 
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id)
+      );
+
+      if (!scope) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      if (!canAccessHospital(scope, user.hospital_id)) {
+        return reply.status(403).send({
+          message: "You cannot access this user's hospital",
+        });
+      }
+
       const labs = await listLabsForUser(fastify.db, userId);
 
       return { user, labs };
@@ -81,6 +100,24 @@ const userLabRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!lab) {
         return reply.status(404).send({ message: "Lab not found" });
+      }
+
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id)
+      );
+
+      if (!scope) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      if (
+        !canAccessHospital(scope, user.hospital_id) ||
+        !canAccessHospital(scope, lab.hospital_id)
+      ) {
+        return reply.status(403).send({
+          message: "You cannot assign users across this hospital boundary",
+        });
       }
 
       try {
@@ -134,6 +171,24 @@ const userLabRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!lab) {
         return reply.status(404).send({ message: "Lab not found" });
+      }
+
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id)
+      );
+
+      if (!scope) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      if (
+        !canAccessHospital(scope, user.hospital_id) ||
+        !canAccessHospital(scope, lab.hospital_id)
+      ) {
+        return reply.status(403).send({
+          message: "You cannot remove assignments across this hospital boundary",
+        });
       }
 
       const assignment = await removeUserFromLab(

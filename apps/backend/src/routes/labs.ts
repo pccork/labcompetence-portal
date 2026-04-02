@@ -1,10 +1,15 @@
 import { FastifyPluginAsync } from "fastify";
 import { Role } from "shared-types";
 
+import {
+  canAccessHospital,
+  getHospitalAccessScope,
+} from "../services/access-policy-service";
 import { findHospitalById } from "../services/hospital-service";
 import {
   createLab,
   deleteLab,
+  findLabById,
   listLabs,
   updateLab,
 } from "../services/lab-service";
@@ -24,11 +29,32 @@ interface LabParams {
 }
 
 const labRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get("/labs", async () => {
-    const labs = await listLabs(fastify.db);
+  fastify.get(
+    "/labs",
+    {
+      preHandler: [
+        fastify.authenticate,
+        fastify.requireRole(Role.ADMIN),
+      ],
+    },
+    async (request, reply) => {
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id)
+      );
 
-    return { labs };
-  });
+      if (!scope) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      const labs = await listLabs(
+        fastify.db,
+        scope.canAccessAllHospitals ? undefined : scope.homeHospitalId
+      );
+
+      return { labs };
+    }
+  );
 
   fastify.post<CreateLabBody>(
     "/labs",
@@ -57,6 +83,21 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!hospital) {
         return reply.status(404).send({ message: "Hospital not found" });
+      }
+
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id)
+      );
+
+      if (!scope) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      if (!canAccessHospital(scope, hospitalId)) {
+        return reply.status(403).send({
+          message: "You cannot create labs for this hospital",
+        });
       }
 
       try {
@@ -114,6 +155,30 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ message: "Hospital not found" });
       }
 
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id)
+      );
+
+      if (!scope) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      const existingLab = await findLabById(fastify.db, labId);
+
+      if (!existingLab) {
+        return reply.status(404).send({ message: "Lab not found" });
+      }
+
+      if (
+        !canAccessHospital(scope, existingLab.hospital_id) ||
+        !canAccessHospital(scope, hospitalId)
+      ) {
+        return reply.status(403).send({
+          message: "You cannot update labs across this hospital boundary",
+        });
+      }
+
       try {
         const lab = await updateLab(
           fastify.db,
@@ -156,6 +221,27 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       try {
+        const scope = await getHospitalAccessScope(
+          fastify.db,
+          Number(request.user.id)
+        );
+
+        if (!scope) {
+          return reply.status(404).send({ message: "User not found" });
+        }
+
+        const existingLab = await findLabById(fastify.db, labId);
+
+        if (!existingLab) {
+          return reply.status(404).send({ message: "Lab not found" });
+        }
+
+        if (!canAccessHospital(scope, existingLab.hospital_id)) {
+          return reply.status(403).send({
+            message: "You cannot delete labs from this hospital",
+          });
+        }
+
         const lab = await deleteLab(fastify.db, labId);
 
         if (!lab) {

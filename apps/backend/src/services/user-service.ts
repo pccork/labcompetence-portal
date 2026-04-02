@@ -85,7 +85,7 @@ export async function findUserById(db: Pool, id: number) {
   return result.rows[0];
 }
 
-export async function listUsers(db: Pool) {
+export async function listUsers(db: Pool, hospitalId?: number) {
   const result = await db.query<SafeUser>(
     `
     SELECT
@@ -98,8 +98,10 @@ export async function listUsers(db: Pool) {
       u.created_at
     FROM users u
     INNER JOIN hospitals h ON h.id = u.hospital_id
+    WHERE ($1::int IS NULL OR u.hospital_id = $1)
     ORDER BY h.name ASC, u.name ASC
-    `
+    `,
+    [hospitalId ?? null]
   );
 
   return result.rows;

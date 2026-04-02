@@ -9,7 +9,7 @@ export interface Lab {
   created_at: Date;
 }
 
-export async function listLabs(db: Pool) {
+export async function listLabs(db: Pool, hospitalId?: number) {
   const result = await db.query<Lab>(
     `
     SELECT
@@ -21,8 +21,10 @@ export async function listLabs(db: Pool) {
       l.created_at
     FROM labs l
     INNER JOIN hospitals h ON h.id = l.hospital_id
+    WHERE ($1::int IS NULL OR l.hospital_id = $1)
     ORDER BY h.name ASC, l.name ASC
-    `
+    `,
+    [hospitalId ?? null]
   );
 
   return result.rows;

@@ -30,7 +30,39 @@ export interface CreateTrainingRecordInput {
   status?: AssignmentStatus;
 }
 
-export async function listTrainingRecords(db: Pool) {
+export interface TemplateVersionHospitalScope {
+  id: number;
+  lab_id: number;
+  hospital_id: number;
+  is_poc: boolean;
+}
+
+export async function findTemplateVersionHospitalScopeById(
+  db: Pool,
+  templateVersionId: number
+) {
+  const result = await db.query<TemplateVersionHospitalScope>(
+    `
+    SELECT
+      tv.id,
+      l.id AS lab_id,
+      l.hospital_id,
+      l.is_poc
+    FROM template_versions tv
+    INNER JOIN templates t ON t.id = tv.template_id
+    INNER JOIN labs l ON l.id = t.lab_id
+    WHERE tv.id = $1
+    `,
+    [templateVersionId]
+  );
+
+  return result.rows[0];
+}
+
+export async function listTrainingRecords(
+  db: Pool,
+  hospitalId?: number
+) {
   const result = await db.query<TrainingRecordSummary>(
     `
     SELECT
@@ -60,8 +92,10 @@ export async function listTrainingRecords(db: Pool) {
     INNER JOIN templates t ON t.id = tv.template_id
     INNER JOIN labs template_lab ON template_lab.id = t.lab_id
     INNER JOIN hospitals lab_hospital ON lab_hospital.id = template_lab.hospital_id
+    WHERE ($1::int IS NULL OR template_lab.hospital_id = $1)
     ORDER BY tr.expires_at ASC, tr.created_at DESC
-    `
+    `,
+    [hospitalId ?? null]
   );
 
   return result.rows;
@@ -134,7 +168,8 @@ export async function findTrainingRecordById(db: Pool, id: number) {
 
 export async function listTrainingRecordsExpiringWithinDays(
   db: Pool,
-  days: number
+  days: number,
+  hospitalId?: number
 ) {
   const result = await db.query<TrainingRecordSummary>(
     `
@@ -167,9 +202,10 @@ export async function listTrainingRecordsExpiringWithinDays(
     INNER JOIN hospitals lab_hospital ON lab_hospital.id = template_lab.hospital_id
     WHERE tr.expires_at >= NOW()
       AND tr.expires_at <= NOW() + ($1::text || ' days')::interval
+      AND ($2::int IS NULL OR template_lab.hospital_id = $2)
     ORDER BY tr.expires_at ASC
     `,
-    [days]
+    [days, hospitalId ?? null]
   );
 
   return result.rows;
