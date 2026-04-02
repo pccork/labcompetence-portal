@@ -4,6 +4,9 @@ import { env } from "./config/env";
 import postgresPlugin from "./plugins/postgres";
 import authPlugin from "./plugins/auth";
 import authRoutes from "./routes/auth";
+import labRoutes from "./routes/labs";
+import userLabRoutes from "./routes/user-labs";
+import userRoutes from "./routes/users";
 import { Role } from "shared-types";
 
 
@@ -16,6 +19,9 @@ export async function buildServer() {
   await app.register(postgresPlugin);
   await app.register(authPlugin);
   await app.register(authRoutes);
+  await app.register(userRoutes);
+  await app.register(labRoutes);
+  await app.register(userLabRoutes);
 
   app.get("/health", async () => {
     return { status: "ok" };

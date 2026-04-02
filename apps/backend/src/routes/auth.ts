@@ -2,7 +2,10 @@ import "@fastify/jwt";
 import { FastifyPluginAsync } from "fastify";
 import bcrypt from "bcrypt";
 
-import { findUserByEmail } from "../services/user-service";
+import {
+  findUserByEmail,
+  findUserById,
+} from "../services/user-service";
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post("/login", async (request: any, reply) => {
@@ -29,6 +32,21 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     return { token };
   });
+
+  fastify.get(
+    "/me",
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const userId = Number(request.user.id);
+      const user = await findUserById(fastify.db, userId);
+
+      if (!user) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      return { user };
+    }
+  );
 };
 
 export default authRoutes;
