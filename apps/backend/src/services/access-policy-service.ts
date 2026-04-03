@@ -1,9 +1,11 @@
 import { Pool } from "pg";
+import { Role } from "shared-types";
 
 import { findUserById } from "./user-service";
 
 export interface HospitalAccessScope {
   homeHospitalId: number;
+  canAccessAllHospitals: boolean;
   canAccessCrossHospitalPoc: boolean;
 }
 
@@ -32,6 +34,7 @@ export async function getHospitalAccessScope(
 
   return {
     homeHospitalId: requester.hospital_id,
+    canAccessAllHospitals: requester.role === Role.ADMIN,
     canAccessCrossHospitalPoc:
       pocAccessResult.rows[0]?.has_poc_access ?? false,
   };
@@ -43,7 +46,12 @@ export function canAccessHospital(
   targetIsPoc = false
 ) {
   return (
+    scope.canAccessAllHospitals ||
     scope.homeHospitalId === hospitalId ||
     (targetIsPoc && scope.canAccessCrossHospitalPoc)
   );
+}
+
+export function resolveScopedHospitalId(scope: HospitalAccessScope) {
+  return scope.canAccessAllHospitals ? undefined : scope.homeHospitalId;
 }

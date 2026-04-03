@@ -4,6 +4,7 @@ import { Role } from "shared-types";
 import {
   canAccessHospital,
   getHospitalAccessScope,
+  resolveScopedHospitalId,
 } from "../services/access-policy-service";
 import { findHospitalById } from "../services/hospital-service";
 import {
@@ -49,7 +50,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
 
       const labs = await listLabs(
         fastify.db,
-        scope.homeHospitalId
+        resolveScopedHospitalId(scope)
       );
 
       return { labs };

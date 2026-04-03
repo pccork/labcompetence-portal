@@ -27,6 +27,7 @@ declare module "fastify" {
   interface FastifyInstance {
     authenticate: any;
     requireRole: (role: Role) => any;
+    requireAnyRole: (roles: Role[]) => any;
   }
 }
 
@@ -55,6 +56,17 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       reply: FastifyReply
     ) {
       if (request.user.role !== role) {
+        return reply.status(403).send({ message: "Forbidden" });
+      }
+    };
+  });
+
+  fastify.decorate("requireAnyRole", function (roles: Role[]) {
+    return async function (
+      request: FastifyRequest,
+      reply: FastifyReply
+    ) {
+      if (!roles.includes(request.user.role)) {
         return reply.status(403).send({ message: "Forbidden" });
       }
     };
