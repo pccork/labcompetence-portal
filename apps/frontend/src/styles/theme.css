@@ -1,0 +1,193 @@
+:root {
+  --portal-ink: #102a43;
+  --portal-slate: #486581;
+  --portal-sea: #0f766e;
+  --portal-leaf: #16a34a;
+  --portal-warm: #f59e0b;
+  --portal-soft: #f8fafc;
+  --portal-card: rgba(255, 255, 255, 0.9);
+  --portal-border: rgba(148, 163, 184, 0.25);
+  --portal-shadow: 0 24px 48px rgba(15, 23, 42, 0.14);
+  font-family: Avenir Next, Avenir, Nunito Sans, Trebuchet MS, sans-serif;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(15, 118, 110, 0.16), transparent 30%),
+    radial-gradient(circle at top right, rgba(245, 158, 11, 0.16), transparent 28%),
+    linear-gradient(180deg, #f8fbfc 0%, #eef5f4 45%, #e8f3ef 100%);
+  color: var(--portal-ink);
+}
+
+.auth-hero {
+  background:
+    radial-gradient(circle at top left, rgba(15, 118, 110, 0.25), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(22, 163, 74, 0.18), transparent 30%),
+    linear-gradient(135deg, #f8fafc, #edf7f5 60%, #fefce8);
+}
+
+.auth-card,
+.panel-card,
+.metric-card {
+  background: var(--portal-card);
+  border: 1px solid var(--portal-border);
+  box-shadow: var(--portal-shadow);
+}
+
+.auth-card {
+  border-radius: 30px;
+  padding: 2rem;
+  animation: rise-in 700ms ease-out;
+}
+
+.auth-title {
+  color: var(--portal-ink);
+  letter-spacing: -0.04em;
+}
+
+.eyebrow,
+.metric-label {
+  color: var(--portal-sea);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.portal-shell {
+  max-width: 1720px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.portal-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--portal-border);
+  border-radius: 28px;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+}
+
+.metric-card {
+  border-radius: 26px;
+  padding: 1.5rem;
+  min-height: 150px;
+  animation: rise-in 700ms ease-out;
+}
+
+.metric-card.accent {
+  background: linear-gradient(145deg, #0f766e, #16a34a);
+  color: white;
+}
+
+.metric-card.accent .metric-label,
+.metric-card.accent .metric-value {
+  color: white;
+}
+
+.metric-value {
+  color: var(--portal-ink);
+  font-size: clamp(3rem, 8vw, 4.8rem);
+  font-weight: 800;
+  letter-spacing: -0.08em;
+  line-height: 0.9;
+}
+
+.panel-card {
+  border-radius: 28px;
+  padding: 1.5rem;
+  height: 100%;
+  animation: rise-in 800ms ease-out;
+}
+
+.panel-heading-row,
+.list-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.scroll-list {
+  display: grid;
+  gap: 0.85rem;
+  max-height: 540px;
+  overflow: auto;
+  padding-right: 0.2rem;
+}
+
+.list-card {
+  padding: 1rem 1.15rem;
+  border-radius: 22px;
+  border: 1px solid var(--portal-border);
+  background: #ffffff;
+}
+
+.list-title {
+  color: var(--portal-ink);
+  font-size: 1rem;
+  font-weight: 800;
+  margin-bottom: 0.25rem;
+}
+
+.list-meta,
+.empty-state,
+.lab-chip small {
+  color: var(--portal-slate);
+  font-size: 0.92rem;
+}
+
+.lab-grid {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.lab-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 1rem;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  border: 1px solid var(--portal-border);
+}
+
+.button.is-link {
+  background: linear-gradient(135deg, var(--portal-sea), var(--portal-leaf));
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .portal-shell {
+    padding: 1rem;
+  }
+
+  .portal-topbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .auth-card,
+  .panel-card,
+  .metric-card {
+    padding: 1.2rem;
+  }
+}
