@@ -2,24 +2,37 @@ import { useMemo, useState } from "react";
 
 import { CurrentUser } from "../auth/api";
 import {
+  HospitalSummary,
   LabSummary,
   TemplateSummary,
   TrainingAssignmentSummary,
   TrainingRecordSummary,
+  UserSummary,
 } from "./api";
 import { DashboardMetrics } from "./components/DashboardMetrics";
 import { LabsPanel } from "./components/LabsPanel";
 import { TemplatesPanel } from "./components/TemplatesPanel";
 import { TrainingAssignmentsPanel } from "./components/TrainingAssignmentsPanel";
 import { TrainingRecordsPanel } from "./components/TrainingRecordsPanel";
+import { UsersPanel } from "./components/UsersPanel";
 
 interface DashboardShellProps {
   currentUser: CurrentUser;
+  hospitals: HospitalSummary[];
+  users: UserSummary[];
   labs: LabSummary[];
   templates: TemplateSummary[];
   assignments: TrainingAssignmentSummary[];
   records: TrainingRecordSummary[];
   onRefresh: () => void;
+  onCreateUser: (input: {
+    hospitalId: number;
+    name: string;
+    email: string;
+    password: string;
+    role: string;
+    staffType: string;
+  }) => Promise<void>;
   onSignOut: () => void;
   errorMessage: string | null;
   isLoading: boolean;
@@ -27,6 +40,7 @@ interface DashboardShellProps {
 
 const dashboardViews = [
   { id: "overview", label: "Overview" },
+  { id: "users", label: "Users" },
   { id: "assignments", label: "Due training" },
   { id: "templates", label: "Templates" },
   { id: "records", label: "Records" },
@@ -42,11 +56,14 @@ function getDaysUntil(value: string) {
 
 export function DashboardShell({
   currentUser,
+  hospitals,
+  users,
   labs,
   templates,
   assignments,
   records,
   onRefresh,
+  onCreateUser,
   onSignOut,
   errorMessage,
   isLoading,
@@ -155,11 +172,13 @@ export function DashboardShell({
                 ? "Service dashboard"
                 : activeView === "assignments"
                   ? "Training due and renewal planning"
-                  : activeView === "templates"
-                    ? "Digital form templates"
-                    : activeView === "records"
-                      ? "Completed and in-progress records"
-                      : "Lab section directory"}
+                  : activeView === "users"
+                    ? "User setup and staff directory"
+                    : activeView === "templates"
+                      ? "Digital form templates"
+                      : activeView === "records"
+                        ? "Completed and in-progress records"
+                        : "Lab section directory"}
             </h2>
           </div>
 
@@ -215,6 +234,14 @@ export function DashboardShell({
           <TrainingAssignmentsPanel
             assignments={filteredAssignments}
             selectedLabName={selectedLabName}
+          />
+        ) : null}
+
+        {activeView === "users" ? (
+          <UsersPanel
+            hospitals={hospitals}
+            users={users}
+            onCreateUser={onCreateUser}
           />
         ) : null}
 

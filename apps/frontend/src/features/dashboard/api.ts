@@ -1,5 +1,22 @@
 import { apiRequest } from "../../shared/api/client";
 
+export interface HospitalSummary {
+  id: number;
+  name: string;
+  created_at: string;
+}
+
+export interface UserSummary {
+  id: number;
+  hospital_id: number;
+  hospital_name: string;
+  name: string;
+  email: string;
+  role: string;
+  staff_type: string;
+  created_at: string;
+}
+
 export interface LabSummary {
   id: number;
   hospital_id: number;
@@ -59,6 +76,35 @@ export interface TrainingRecordSummary {
 
 export async function fetchLabs(token: string) {
   return apiRequest<{ labs: LabSummary[] }>("/labs", {}, token);
+}
+
+export async function fetchHospitals(token: string) {
+  return apiRequest<{ hospitals: HospitalSummary[] }>("/hospitals", {}, token);
+}
+
+export async function fetchUsers(token: string) {
+  return apiRequest<{ users: UserSummary[] }>("/users", {}, token);
+}
+
+export async function createUserAccount(
+  token: string,
+  input: {
+    hospitalId: number;
+    name: string;
+    email: string;
+    password: string;
+    role: string;
+    staffType: string;
+  }
+) {
+  return apiRequest<{ user: UserSummary }>(
+    "/users",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token
+  );
 }
 
 export async function fetchTemplates(token: string) {

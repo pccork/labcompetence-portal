@@ -254,6 +254,15 @@ body {
   gap: 0.35rem;
 }
 
+.stacked-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.user-list {
+  max-height: 820px;
+}
+
 .button.is-link {
   background: linear-gradient(135deg, var(--portal-sea), var(--portal-leaf));
 }
