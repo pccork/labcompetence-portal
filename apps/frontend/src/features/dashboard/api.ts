@@ -39,6 +39,16 @@ export interface TemplateSummary {
   latest_version_number: number | null;
 }
 
+export interface CreateTemplateInput {
+  name: string;
+  labId: number;
+  formFamilyReference: string;
+  templateKind: string;
+  targetStaffType: string;
+  isActive: boolean;
+  schemaJson: Record<string, unknown>;
+}
+
 export interface TrainingAssignmentSummary {
   id: number;
   user_id: number;
@@ -109,6 +119,20 @@ export async function createUserAccount(
 
 export async function fetchTemplates(token: string) {
   return apiRequest<{ templates: TemplateSummary[] }>("/templates", {}, token);
+}
+
+export async function createTemplate(
+  token: string,
+  input: CreateTemplateInput
+) {
+  return apiRequest<{ template: TemplateSummary }>(
+    "/templates",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token
+  );
 }
 
 export async function fetchDueAssignments(token: string, days = 90) {

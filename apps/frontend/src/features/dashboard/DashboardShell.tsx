@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 
 import { CurrentUser } from "../auth/api";
 import {
+  CreateTemplateInput,
   HospitalSummary,
   LabSummary,
   TemplateSummary,
@@ -33,6 +34,7 @@ interface DashboardShellProps {
     role: string;
     staffType: string;
   }) => Promise<void>;
+  onCreateTemplate: (input: CreateTemplateInput) => Promise<void>;
   onSignOut: () => void;
   errorMessage: string | null;
   isLoading: boolean;
@@ -64,6 +66,7 @@ export function DashboardShell({
   records,
   onRefresh,
   onCreateUser,
+  onCreateTemplate,
   onSignOut,
   errorMessage,
   isLoading,
@@ -222,7 +225,11 @@ export function DashboardShell({
               />
             </div>
             <div className="column is-6-desktop">
-              <TemplatesPanel templates={filteredTemplates} />
+              <TemplatesPanel
+                labs={labs}
+                templates={filteredTemplates}
+                onCreateTemplate={onCreateTemplate}
+              />
             </div>
             <div className="column is-6-desktop">
               <TrainingRecordsPanel records={filteredRecords} />
@@ -246,7 +253,11 @@ export function DashboardShell({
         ) : null}
 
         {activeView === "templates" ? (
-          <TemplatesPanel templates={filteredTemplates} />
+          <TemplatesPanel
+            labs={labs}
+            templates={filteredTemplates}
+            onCreateTemplate={onCreateTemplate}
+          />
         ) : null}
 
         {activeView === "records" ? (

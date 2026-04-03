@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import { CurrentUser, fetchCurrentUser, loginUser } from "../features/auth/api";
 import { LoginPanel } from "../features/auth/LoginPanel";
 import {
+  createTemplate,
+  CreateTemplateInput,
   createUserAccount,
   fetchDueAssignments,
   fetchHospitals,
@@ -134,6 +136,10 @@ export function App() {
       }
       onCreateUser={async (input) => {
         await createUserAccount(token, input);
+        await loadDashboard(token);
+      }}
+      onCreateTemplate={async (input: CreateTemplateInput) => {
+        await createTemplate(token, input);
         await loadDashboard(token);
       }}
       onSignOut={handleSignOut}

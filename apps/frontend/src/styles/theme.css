@@ -263,6 +263,33 @@ body {
   max-height: 820px;
 }
 
+.template-list {
+  max-height: 900px;
+}
+
+.template-schema-editor {
+  min-height: 260px;
+  font-family:
+    SFMono-Regular,
+    ui-monospace,
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    "Courier New",
+    monospace;
+  font-size: 0.85rem;
+}
+
+.template-active-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.5rem;
+  color: var(--portal-slate);
+  font-weight: 700;
+}
+
 .directory-controls {
   display: grid;
   gap: 1rem;
