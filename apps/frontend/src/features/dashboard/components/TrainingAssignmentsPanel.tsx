@@ -11,6 +11,11 @@ import {
   TrainingAssignmentSummary,
   UserSummary,
 } from "../api";
+import { ReportExportActions } from "./ReportExportActions";
+import {
+  downloadCsvReport,
+  printReportTable,
+} from "../../../shared/export/reportExport";
 
 interface TrainingAssignmentsPanelProps {
   assignments: TrainingAssignmentSummary[];
@@ -126,6 +131,34 @@ export function TrainingAssignmentsPanel({
         left.next_due_at.localeCompare(right.next_due_at)
       );
   }, [assignments, searchTerm]);
+
+  const assignmentReportRows = useMemo(
+    () =>
+      visibleAssignments.map((assignment) => [
+        assignment.trainee_name,
+        assignment.trainee_email,
+        assignment.staff_type.replaceAll("_", " "),
+        assignment.template_name,
+        assignment.lab_name,
+        formatDate(assignment.next_due_at),
+        assignment.renewal_interval_months,
+        getDaysUntil(assignment.next_due_at),
+        assignment.assigned_by_name,
+      ]),
+    [visibleAssignments]
+  );
+
+  const assignmentReportColumns = [
+    "Trainee",
+    "Email",
+    "Staff type",
+    "Template",
+    "Section",
+    "Next due date",
+    "Renewal months",
+    "Days remaining",
+    "Assigned by",
+  ];
 
   return (
     <section className="columns is-multiline">
@@ -266,9 +299,36 @@ export function TrainingAssignmentsPanel({
               <p className="panel-kicker">Trainer queue</p>
               <h2 className="title is-5">Training due soon</h2>
             </div>
-            <span className="tag is-warning is-light">
-              {visibleAssignments.length} due items
-            </span>
+            <div className="panel-heading-actions">
+              <span className="tag is-warning is-light">
+                {visibleAssignments.length} due items
+              </span>
+              <ReportExportActions
+                disabled={!visibleAssignments.length}
+                onDownloadCsv={() =>
+                  downloadCsvReport(
+                    `training-assignments-${selectedLabName
+                      .toLowerCase()
+                      .replaceAll(/[^a-z0-9]+/g, "-")
+                      .replaceAll(/^-|-$/g, "") || "all-sections"}.csv`,
+                    assignmentReportColumns,
+                    assignmentReportRows
+                  )
+                }
+                onPrint={() =>
+                  printReportTable(assignmentReportRows, {
+                    columns: assignmentReportColumns,
+                    generatedBy: selectedLabName,
+                    subtitle: `Current due-training list for ${
+                      selectedLabName === "All sections"
+                        ? "all lab sections"
+                        : selectedLabName
+                    }.`,
+                    title: "Training due soon",
+                  })
+                }
+              />
+            </div>
           </div>
 
           <p className="list-meta mb-4">

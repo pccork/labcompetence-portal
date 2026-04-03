@@ -62,6 +62,8 @@ export interface TrainingAssignmentSummary {
   lab_name: string;
   lab_hospital_id: number;
   lab_hospital_name: string;
+  assigned_by: number | null;
+  assigned_by_name: string | null;
   renewal_interval_months: number;
   next_due_at: string;
   is_active: boolean;

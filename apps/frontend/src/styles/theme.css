@@ -192,6 +192,18 @@ body {
   min-width: 0;
 }
 
+.panel-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.report-action-group {
+  margin-bottom: 0 !important;
+}
+
 .scroll-list {
   display: grid;
   gap: 0.85rem;
@@ -398,6 +410,15 @@ body {
   .portal-topbar {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .panel-heading-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .panel-heading-actions {
+    justify-content: flex-start;
   }
 
   .auth-card,

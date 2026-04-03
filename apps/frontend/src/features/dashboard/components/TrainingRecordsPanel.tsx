@@ -12,6 +12,11 @@ import {
   TrainingRecordSummary,
   UserSummary,
 } from "../api";
+import { ReportExportActions } from "./ReportExportActions";
+import {
+  downloadCsvReport,
+  printReportTable,
+} from "../../../shared/export/reportExport";
 
 interface TrainingRecordsPanelProps {
   assignments: TrainingAssignmentSummary[];
@@ -169,6 +174,34 @@ export function TrainingRecordsPanel({
       )?.latest_version_id || 1
     );
   }, [selectedAssignment, templates]);
+
+  const recordReportColumns = [
+    "Trainee",
+    "Email",
+    "Staff type",
+    "Template",
+    "Section",
+    "Scheduled date",
+    "Completed date",
+    "Expires date",
+    "Status",
+  ];
+
+  const recordReportRows = useMemo(
+    () =>
+      records.map((record) => [
+        record.trainee_name,
+        record.trainee_email,
+        record.trainee_staff_type.replaceAll("_", " "),
+        record.template_name,
+        record.lab_name,
+        formatDate(record.scheduled_at),
+        formatDate(record.completed_at),
+        formatDate(record.expires_at),
+        record.status,
+      ]),
+    [records]
+  );
 
   return (
     <section className="columns is-multiline">
@@ -508,7 +541,30 @@ export function TrainingRecordsPanel({
               <p className="panel-kicker">Competency records</p>
               <h2 className="title is-5">Recent training records</h2>
             </div>
-            <span className="tag is-success is-light">{records.length}</span>
+            <div className="panel-heading-actions">
+              <span className="tag is-success is-light">
+                {records.length}
+              </span>
+              <ReportExportActions
+                disabled={!records.length}
+                onDownloadCsv={() =>
+                  downloadCsvReport(
+                    "training-records.csv",
+                    recordReportColumns,
+                    recordReportRows
+                  )
+                }
+                onPrint={() =>
+                  printReportTable(recordReportRows, {
+                    columns: recordReportColumns,
+                    generatedBy: "Lab Competence Portal",
+                    subtitle:
+                      "Current list of training records shown in the dashboard.",
+                    title: "Training records",
+                  })
+                }
+              />
+            </div>
           </div>
 
           <div className="scroll-list records-list">
