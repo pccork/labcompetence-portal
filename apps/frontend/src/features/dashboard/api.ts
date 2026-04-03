@@ -36,6 +36,7 @@ export interface TemplateSummary {
   template_kind: string;
   target_staff_type: string;
   is_active: boolean;
+  latest_version_id: number | null;
   latest_version_number: number | null;
 }
 
@@ -82,6 +83,33 @@ export interface TrainingRecordSummary {
   expires_at: string;
   scheduled_at: string | null;
   completed_at: string | null;
+}
+
+export interface CreateTrainingAssignmentInput {
+  userId: number;
+  templateId: number;
+  renewalIntervalMonths: number;
+  nextDueAt: string;
+}
+
+export interface CreateTrainingRecordInput {
+  traineeId: number;
+  templateVersionId: number;
+  assignedTrainerId?: number | null;
+  trainingAssignmentId?: number | null;
+  scheduledAt?: string | null;
+  completedAt?: string | null;
+  traineeSignedAt?: string | null;
+  assessmentPayloadJson?: Record<string, unknown>;
+  specimens?: Array<{
+    specimenLabel: string;
+    specimenType?: string | null;
+    analyserReference?: string | null;
+    processedAt?: string | null;
+    resultSummary?: string | null;
+  }>;
+  expiresAt: string;
+  status?: string;
 }
 
 export async function fetchLabs(token: string) {
@@ -143,10 +171,46 @@ export async function fetchDueAssignments(token: string, days = 90) {
   );
 }
 
+export async function fetchTrainingAssignments(token: string) {
+  return apiRequest<{ assignments: TrainingAssignmentSummary[] }>(
+    "/training-assignments",
+    {},
+    token
+  );
+}
+
+export async function createTrainingAssignment(
+  token: string,
+  input: CreateTrainingAssignmentInput
+) {
+  return apiRequest<{ assignment: TrainingAssignmentSummary }>(
+    "/training-assignments",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token
+  );
+}
+
 export async function fetchTrainingRecords(token: string) {
   return apiRequest<{ records: TrainingRecordSummary[] }>(
     "/training-records",
     {},
+    token
+  );
+}
+
+export async function createTrainingRecord(
+  token: string,
+  input: CreateTrainingRecordInput
+) {
+  return apiRequest<{ record: TrainingRecordSummary }>(
+    "/training-records",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
     token
   );
 }

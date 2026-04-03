@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 
 import { CurrentUser } from "../auth/api";
 import {
+  CreateTrainingAssignmentInput,
+  CreateTrainingRecordInput,
   CreateTemplateInput,
   HospitalSummary,
   LabSummary,
@@ -35,6 +37,10 @@ interface DashboardShellProps {
     staffType: string;
   }) => Promise<void>;
   onCreateTemplate: (input: CreateTemplateInput) => Promise<void>;
+  onCreateAssignment: (
+    input: CreateTrainingAssignmentInput
+  ) => Promise<void>;
+  onCreateRecord: (input: CreateTrainingRecordInput) => Promise<void>;
   onSignOut: () => void;
   errorMessage: string | null;
   isLoading: boolean;
@@ -67,6 +73,8 @@ export function DashboardShell({
   onRefresh,
   onCreateUser,
   onCreateTemplate,
+  onCreateAssignment,
+  onCreateRecord,
   onSignOut,
   errorMessage,
   isLoading,
@@ -214,7 +222,10 @@ export function DashboardShell({
             <div className="column is-7-desktop">
               <TrainingAssignmentsPanel
                 assignments={filteredAssignments}
+                templates={filteredTemplates}
+                users={users}
                 selectedLabName={selectedLabName}
+                onCreateAssignment={onCreateAssignment}
               />
             </div>
             <div className="column is-5-desktop">
@@ -232,7 +243,13 @@ export function DashboardShell({
               />
             </div>
             <div className="column is-6-desktop">
-              <TrainingRecordsPanel records={filteredRecords} />
+              <TrainingRecordsPanel
+                assignments={filteredAssignments}
+                records={filteredRecords}
+                templates={filteredTemplates}
+                users={users}
+                onCreateRecord={onCreateRecord}
+              />
             </div>
           </section>
         ) : null}
@@ -240,7 +257,10 @@ export function DashboardShell({
         {activeView === "assignments" ? (
           <TrainingAssignmentsPanel
             assignments={filteredAssignments}
+            templates={filteredTemplates}
+            users={users}
             selectedLabName={selectedLabName}
+            onCreateAssignment={onCreateAssignment}
           />
         ) : null}
 
@@ -261,7 +281,13 @@ export function DashboardShell({
         ) : null}
 
         {activeView === "records" ? (
-          <TrainingRecordsPanel records={filteredRecords} />
+          <TrainingRecordsPanel
+            assignments={filteredAssignments}
+            records={filteredRecords}
+            templates={filteredTemplates}
+            users={users}
+            onCreateRecord={onCreateRecord}
+          />
         ) : null}
 
         {activeView === "labs" ? (

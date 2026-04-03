@@ -1,7 +1,24 @@
-import { TrainingRecordSummary } from "../api";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
+
+import {
+  CreateTrainingRecordInput,
+  TemplateSummary,
+  TrainingAssignmentSummary,
+  TrainingRecordSummary,
+  UserSummary,
+} from "../api";
 
 interface TrainingRecordsPanelProps {
+  assignments: TrainingAssignmentSummary[];
   records: TrainingRecordSummary[];
+  templates: TemplateSummary[];
+  users: UserSummary[];
+  onCreateRecord: (input: CreateTrainingRecordInput) => Promise<void>;
 }
 
 function formatDate(value: string | null) {
@@ -16,42 +33,511 @@ function formatDate(value: string | null) {
   });
 }
 
-export function TrainingRecordsPanel({
-  records,
-}: TrainingRecordsPanelProps) {
-  return (
-    <section className="panel-card">
-      <div className="panel-heading-row">
-        <div>
-          <p className="panel-kicker">Competency records</p>
-          <h2 className="title is-5">Recent training records</h2>
-        </div>
-        <span className="tag is-success is-light">{records.length}</span>
-      </div>
+function formatForDateInput(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
 
-      <div className="scroll-list">
-        {records.length === 0 ? (
-          <p className="empty-state">No training records returned yet.</p>
-        ) : (
-          records.map((record) => (
-            <article className="list-card" key={record.id}>
-              <div>
-                <h3 className="list-title">{record.template_name}</h3>
-                <p className="list-meta">
-                  {record.trainee_name} · {record.lab_name} ·{" "}
-                  {record.trainee_staff_type.replaceAll("_", " ")}
-                </p>
+function toOptionalIso(value: string) {
+  if (!value) {
+    return null;
+  }
+
+  return new Date(`${value}T10:00:00.000Z`).toISOString();
+}
+
+function toRequiredIso(value: string) {
+  return new Date(`${value}T10:00:00.000Z`).toISOString();
+}
+
+const statusOptions = [
+  { value: "pending", label: "Pending" },
+  { value: "submitted", label: "Submitted" },
+  { value: "signedoff", label: "Signed off" },
+];
+
+export function TrainingRecordsPanel({
+  assignments,
+  records,
+  templates,
+  users,
+  onCreateRecord,
+}: TrainingRecordsPanelProps) {
+  const sortedUsers = useMemo(
+    () =>
+      [...users]
+        .filter((user) => user.role !== "admin")
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    [users]
+  );
+
+  const trainerUsers = useMemo(
+    () =>
+      [...users]
+        .filter((user) => user.role === "trainer" || user.role === "admin")
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    [users]
+  );
+
+  const [traineeId, setTraineeId] = useState(() => sortedUsers[0]?.id || 1);
+  const [assignedTrainerId, setAssignedTrainerId] = useState<number | "none">(
+    () => trainerUsers[0]?.id || "none"
+  );
+  const [trainingAssignmentId, setTrainingAssignmentId] = useState<
+    number | "none"
+  >(() => assignments[0]?.id || "none");
+  const [templateVersionId, setTemplateVersionId] = useState(
+    () => templates[0]?.latest_version_id || 1
+  );
+  const [scheduledAt, setScheduledAt] = useState(() =>
+    formatForDateInput(new Date())
+  );
+  const [completedAt, setCompletedAt] = useState("");
+  const [traineeSignedAt, setTraineeSignedAt] = useState("");
+  const [expiresAt, setExpiresAt] = useState(() =>
+    formatForDateInput(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000))
+  );
+  const [status, setStatus] = useState("pending");
+  const [specimenOne, setSpecimenOne] = useState("");
+  const [specimenTwo, setSpecimenTwo] = useState("");
+  const [resultSummary, setResultSummary] = useState("");
+  const [assessmentNotes, setAssessmentNotes] = useState(
+    JSON.stringify(
+      {
+        trainerComments: "",
+        traineeDeclarationAccepted: false,
+        sectionChecklist: [],
+      },
+      null,
+      2
+    )
+  );
+  const [formMessage, setFormMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const selectedAssignment = useMemo(() => {
+    if (trainingAssignmentId === "none") {
+      return undefined;
+    }
+
+    return assignments.find(
+      (assignment) => assignment.id === trainingAssignmentId
+    );
+  }, [assignments, trainingAssignmentId]);
+
+  const selectedTemplate = useMemo(
+    () =>
+      templates.find((template) =>
+        selectedAssignment
+          ? template.id === selectedAssignment.template_id
+          : (template.latest_version_id || 0) === templateVersionId
+      ),
+    [selectedAssignment, templateVersionId, templates]
+  );
+
+  useEffect(() => {
+    const firstUser = sortedUsers[0];
+
+    if (firstUser && !sortedUsers.some((user) => user.id === traineeId)) {
+      setTraineeId(firstUser.id);
+    }
+  }, [sortedUsers, traineeId]);
+
+  useEffect(() => {
+    const firstTrainer = trainerUsers[0];
+
+    if (
+      assignedTrainerId !== "none" &&
+      !trainerUsers.some((trainer) => trainer.id === assignedTrainerId)
+    ) {
+      setAssignedTrainerId(firstTrainer?.id || "none");
+    }
+  }, [assignedTrainerId, trainerUsers]);
+
+  useEffect(() => {
+    if (!selectedAssignment) {
+      const firstTemplate = templates[0];
+      if (firstTemplate) {
+        setTemplateVersionId(firstTemplate.latest_version_id || 1);
+      }
+      return;
+    }
+
+    setTraineeId(selectedAssignment.user_id);
+    setTemplateVersionId(
+      templates.find(
+        (template) => template.id === selectedAssignment.template_id
+      )?.latest_version_id || 1
+    );
+  }, [selectedAssignment, templates]);
+
+  return (
+    <section className="columns is-multiline">
+      <div className="column is-5-desktop">
+        <section className="panel-card">
+          <div className="panel-heading-row">
+            <div>
+              <p className="panel-kicker">Record entry</p>
+              <h2 className="title is-5">Create training record</h2>
+            </div>
+            <span className="tag is-link is-light">
+              {templates.length} templates
+            </span>
+          </div>
+
+          <form
+            className="stacked-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setFormMessage(null);
+
+              let assessmentPayloadJson: Record<string, unknown>;
+
+              try {
+                assessmentPayloadJson = JSON.parse(
+                  assessmentNotes
+                ) as Record<string, unknown>;
+              } catch {
+                setFormMessage("Assessment JSON is not valid.");
+                return;
+              }
+
+              const specimens = [specimenOne, specimenTwo]
+                .map((value) => value.trim())
+                .filter(Boolean)
+                .map((specimenLabel) => ({
+                  specimenLabel,
+                  resultSummary: resultSummary.trim() || null,
+                }));
+
+              startTransition(() => {
+                void onCreateRecord({
+                  traineeId,
+                  templateVersionId,
+                  assignedTrainerId:
+                    assignedTrainerId === "none" ? null : assignedTrainerId,
+                  trainingAssignmentId:
+                    trainingAssignmentId === "none"
+                      ? null
+                      : trainingAssignmentId,
+                  scheduledAt: toOptionalIso(scheduledAt),
+                  completedAt: toOptionalIso(completedAt),
+                  traineeSignedAt: toOptionalIso(traineeSignedAt),
+                  assessmentPayloadJson,
+                  specimens,
+                  expiresAt: toRequiredIso(expiresAt),
+                  status,
+                })
+                  .then(() => {
+                    setSpecimenOne("");
+                    setSpecimenTwo("");
+                    setResultSummary("");
+                    setFormMessage("Training record created.");
+                  })
+                  .catch((error) => {
+                    setFormMessage(
+                      error instanceof Error
+                        ? error.message
+                        : "Unable to create training record"
+                    );
+                  });
+              });
+            }}
+          >
+            <div className="field">
+              <label className="label" htmlFor="record-assignment">
+                Existing assignment
+              </label>
+              <div className="select is-fullwidth">
+                <select
+                  id="record-assignment"
+                  value={trainingAssignmentId}
+                  onChange={(event) =>
+                    setTrainingAssignmentId(
+                      event.target.value === "none"
+                        ? "none"
+                        : Number(event.target.value)
+                    )
+                  }
+                >
+                  <option value="none">No linked assignment</option>
+                  {assignments.map((assignment) => (
+                    <option key={assignment.id} value={assignment.id}>
+                      {assignment.trainee_name} · {assignment.template_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="field">
+              <label className="label" htmlFor="record-trainee">
+                Trainee
+              </label>
+              <div className="select is-fullwidth">
+                <select
+                  id="record-trainee"
+                  value={traineeId}
+                  onChange={(event) =>
+                    setTraineeId(Number(event.target.value))
+                  }
+                >
+                  {sortedUsers.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name} · {user.staff_type.replaceAll("_", " ")}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="field">
+              <label className="label" htmlFor="record-template">
+                Template version
+              </label>
+              <div className="select is-fullwidth">
+                <select
+                  id="record-template"
+                  value={templateVersionId}
+                  onChange={(event) =>
+                    setTemplateVersionId(Number(event.target.value))
+                  }
+                  disabled={trainingAssignmentId !== "none"}
+                >
+                  {templates.map((template) => (
+                    <option
+                      key={`${template.id}-${
+                        template.latest_version_id || "missing"
+                      }`}
+                      value={template.latest_version_id || 0}
+                      disabled={!template.latest_version_id}
+                    >
+                      {template.name} · v{template.latest_version_number || 1}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {selectedTemplate ? (
                 <p className="mini-note">
-                  Scheduled {formatDate(record.scheduled_at)} · completed{" "}
-                  {formatDate(record.completed_at)} · expires{" "}
-                  {formatDate(record.expires_at)}
+                  {selectedTemplate.lab_name} ·{" "}
+                  {selectedTemplate.target_staff_type.replaceAll("_", " ")}
                 </p>
+              ) : null}
+            </div>
+
+            <div className="field">
+              <label className="label" htmlFor="record-trainer">
+                Trainer / reviewer
+              </label>
+              <div className="select is-fullwidth">
+                <select
+                  id="record-trainer"
+                  value={assignedTrainerId}
+                  onChange={(event) =>
+                    setAssignedTrainerId(
+                      event.target.value === "none"
+                        ? "none"
+                        : Number(event.target.value)
+                    )
+                  }
+                >
+                  <option value="none">Not assigned</option>
+                  {trainerUsers.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name} · {user.role}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="columns is-mobile is-variable is-2">
+              <div className="column is-6">
+                <label className="label" htmlFor="record-scheduled">
+                  Scheduled date
+                </label>
+                <input
+                  id="record-scheduled"
+                  className="input"
+                  type="date"
+                  value={scheduledAt}
+                  onChange={(event) => setScheduledAt(event.target.value)}
+                />
               </div>
 
-              <span className="tag is-primary is-light">{record.status}</span>
-            </article>
-          ))
-        )}
+              <div className="column is-6">
+                <label className="label" htmlFor="record-completed">
+                  Completed date
+                </label>
+                <input
+                  id="record-completed"
+                  className="input"
+                  type="date"
+                  value={completedAt}
+                  onChange={(event) => setCompletedAt(event.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="columns is-mobile is-variable is-2">
+              <div className="column is-6">
+                <label className="label" htmlFor="record-trainee-signed">
+                  Trainee sign date
+                </label>
+                <input
+                  id="record-trainee-signed"
+                  className="input"
+                  type="date"
+                  value={traineeSignedAt}
+                  onChange={(event) =>
+                    setTraineeSignedAt(event.target.value)
+                  }
+                />
+              </div>
+
+              <div className="column is-6">
+                <label className="label" htmlFor="record-expires">
+                  Expires date
+                </label>
+                <input
+                  id="record-expires"
+                  className="input"
+                  type="date"
+                  value={expiresAt}
+                  onChange={(event) => setExpiresAt(event.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="field">
+              <label className="label" htmlFor="record-status">
+                Status
+              </label>
+              <div className="select is-fullwidth">
+                <select
+                  id="record-status"
+                  value={status}
+                  onChange={(event) => setStatus(event.target.value)}
+                >
+                  {statusOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="columns is-mobile is-variable is-2">
+              <div className="column is-6">
+                <label className="label" htmlFor="record-specimen-one">
+                  Specimen evidence 1
+                </label>
+                <input
+                  id="record-specimen-one"
+                  className="input"
+                  type="text"
+                  value={specimenOne}
+                  onChange={(event) => setSpecimenOne(event.target.value)}
+                  placeholder="e.g. LAB12345"
+                />
+              </div>
+
+              <div className="column is-6">
+                <label className="label" htmlFor="record-specimen-two">
+                  Specimen evidence 2
+                </label>
+                <input
+                  id="record-specimen-two"
+                  className="input"
+                  type="text"
+                  value={specimenTwo}
+                  onChange={(event) => setSpecimenTwo(event.target.value)}
+                  placeholder="e.g. LAB12346"
+                />
+              </div>
+            </div>
+
+            <div className="field">
+              <label className="label" htmlFor="record-summary">
+                Evidence note
+              </label>
+              <input
+                id="record-summary"
+                className="input"
+                type="text"
+                value={resultSummary}
+                onChange={(event) => setResultSummary(event.target.value)}
+                placeholder="Optional short note for both specimens"
+              />
+            </div>
+
+            <div className="field">
+              <label className="label" htmlFor="record-assessment-json">
+                Assessment JSON
+              </label>
+              <textarea
+                id="record-assessment-json"
+                className="textarea template-schema-editor"
+                value={assessmentNotes}
+                onChange={(event) =>
+                  setAssessmentNotes(event.target.value)
+                }
+                spellCheck="false"
+              />
+            </div>
+
+            {formMessage ? <p className="mini-note">{formMessage}</p> : null}
+
+            <button
+              className={`button is-link is-fullwidth ${
+                isPending ? "is-loading" : ""
+              }`}
+              type="submit"
+              disabled={isPending || !templates.length || !sortedUsers.length}
+            >
+              Create record
+            </button>
+          </form>
+        </section>
+      </div>
+
+      <div className="column is-7-desktop">
+        <section className="panel-card">
+          <div className="panel-heading-row">
+            <div>
+              <p className="panel-kicker">Competency records</p>
+              <h2 className="title is-5">Recent training records</h2>
+            </div>
+            <span className="tag is-success is-light">{records.length}</span>
+          </div>
+
+          <div className="scroll-list records-list">
+            {records.length === 0 ? (
+              <p className="empty-state">No training records returned yet.</p>
+            ) : (
+              records.map((record) => (
+                <article className="list-card" key={record.id}>
+                  <div>
+                    <h3 className="list-title">{record.template_name}</h3>
+                    <p className="list-meta">
+                      {record.trainee_name} · {record.lab_name} ·{" "}
+                      {record.trainee_staff_type.replaceAll("_", " ")}
+                    </p>
+                    <p className="mini-note">
+                      Scheduled {formatDate(record.scheduled_at)} · completed{" "}
+                      {formatDate(record.completed_at)} · expires{" "}
+                      {formatDate(record.expires_at)}
+                    </p>
+                  </div>
+
+                  <span className="tag is-primary is-light">
+                    {record.status}
+                  </span>
+                </article>
+              ))
+            )}
+          </div>
+        </section>
       </div>
     </section>
   );

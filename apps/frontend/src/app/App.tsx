@@ -3,13 +3,17 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import { CurrentUser, fetchCurrentUser, loginUser } from "../features/auth/api";
 import { LoginPanel } from "../features/auth/LoginPanel";
 import {
+  createTrainingAssignment,
+  createTrainingRecord,
   createTemplate,
+  CreateTrainingAssignmentInput,
+  CreateTrainingRecordInput,
   CreateTemplateInput,
   createUserAccount,
-  fetchDueAssignments,
   fetchHospitals,
   fetchLabs,
   fetchTemplates,
+  fetchTrainingAssignments,
   fetchTrainingRecords,
   fetchUsers,
   HospitalSummary,
@@ -55,11 +59,11 @@ export function App() {
       ] = await Promise.all([
         fetchCurrentUser(activeToken),
         fetchHospitals(activeToken),
-        fetchUsers(activeToken),
-        fetchLabs(activeToken),
-        fetchTemplates(activeToken),
-        fetchDueAssignments(activeToken, 365),
-        fetchTrainingRecords(activeToken),
+          fetchUsers(activeToken),
+          fetchLabs(activeToken),
+          fetchTemplates(activeToken),
+          fetchTrainingAssignments(activeToken),
+          fetchTrainingRecords(activeToken),
       ]);
 
       setCurrentUser(me.user);
@@ -140,6 +144,16 @@ export function App() {
       }}
       onCreateTemplate={async (input: CreateTemplateInput) => {
         await createTemplate(token, input);
+        await loadDashboard(token);
+      }}
+      onCreateAssignment={async (
+        input: CreateTrainingAssignmentInput
+      ) => {
+        await createTrainingAssignment(token, input);
+        await loadDashboard(token);
+      }}
+      onCreateRecord={async (input: CreateTrainingRecordInput) => {
+        await createTrainingRecord(token, input);
         await loadDashboard(token);
       }}
       onSignOut={handleSignOut}
