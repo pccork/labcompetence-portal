@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { CurrentUser } from "../auth/api";
 import {
@@ -7,6 +7,11 @@ import {
   TrainingAssignmentSummary,
   TrainingRecordSummary,
 } from "./api";
+import { DashboardMetrics } from "./components/DashboardMetrics";
+import { LabsPanel } from "./components/LabsPanel";
+import { TemplatesPanel } from "./components/TemplatesPanel";
+import { TrainingAssignmentsPanel } from "./components/TrainingAssignmentsPanel";
+import { TrainingRecordsPanel } from "./components/TrainingRecordsPanel";
 
 interface DashboardShellProps {
   currentUser: CurrentUser;
@@ -20,17 +25,15 @@ interface DashboardShellProps {
   isLoading: boolean;
 }
 
-function formatDate(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
+const dashboardViews = [
+  { id: "overview", label: "Overview" },
+  { id: "assignments", label: "Due training" },
+  { id: "templates", label: "Templates" },
+  { id: "records", label: "Records" },
+  { id: "labs", label: "Sections" },
+] as const;
 
-  return new Date(value).toLocaleDateString("en-IE", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
+type DashboardView = (typeof dashboardViews)[number]["id"];
 
 function getDaysUntil(value: string) {
   const deltaMs = new Date(value).getTime() - Date.now();
@@ -48,189 +51,189 @@ export function DashboardShell({
   errorMessage,
   isLoading,
 }: DashboardShellProps) {
+  const [activeView, setActiveView] = useState<DashboardView>("overview");
+  const [selectedLabId, setSelectedLabId] = useState<number | "all">("all");
+
+  const selectedLabName = useMemo(() => {
+    if (selectedLabId === "all") {
+      return "All sections";
+    }
+
+    return labs.find((lab) => lab.id === selectedLabId)?.name || "Selected section";
+  }, [labs, selectedLabId]);
+
+  const filteredAssignments = useMemo(() => {
+    if (selectedLabId === "all") {
+      return assignments;
+    }
+
+    return assignments.filter(
+      (assignment) => assignment.lab_id === selectedLabId
+    );
+  }, [assignments, selectedLabId]);
+
+  const filteredTemplates = useMemo(() => {
+    if (selectedLabId === "all") {
+      return templates;
+    }
+
+    return templates.filter(
+      (template) => template.lab_id === selectedLabId
+    );
+  }, [selectedLabId, templates]);
+
+  const filteredRecords = useMemo(() => {
+    if (selectedLabId === "all") {
+      return records;
+    }
+
+    return records.filter(
+      (record) => record.lab_id === selectedLabId
+    );
+  }, [records, selectedLabId]);
+
   const dueSoonCount = useMemo(
     () =>
-      assignments.filter((assignment) => getDaysUntil(assignment.next_due_at) <= 30)
-        .length,
-    [assignments]
+      filteredAssignments.filter(
+        (assignment) => getDaysUntil(assignment.next_due_at) <= 30
+      ).length,
+    [filteredAssignments]
   );
 
   const activeTemplateCount = useMemo(
-    () => templates.filter((template) => template.is_active).length,
-    [templates]
+    () => filteredTemplates.filter((template) => template.is_active).length,
+    [filteredTemplates]
   );
 
   return (
-    <div className="portal-shell">
-      <header className="portal-topbar">
-        <div>
-          <p className="eyebrow">Signed in</p>
-          <h1 className="title is-4 mb-1">{currentUser.name}</h1>
-          <p className="subtitle is-6 mb-0">
-            {currentUser.hospital_name} · {currentUser.role} ·{" "}
-            {currentUser.staff_type.replaceAll("_", " ")}
+    <div className="portal-layout">
+      <aside className="portal-sidebar">
+        <div className="brand-block">
+          <p className="eyebrow">Lab competence</p>
+          <h1 className="title is-4 mb-1">Training portal</h1>
+          <p className="list-meta">
+            ISO-aligned training oversight for staff, trainers, and
+            co-ordinators.
           </p>
         </div>
 
-        <div className="buttons">
-          <button
-            className={`button is-light ${isLoading ? "is-loading" : ""}`}
-            onClick={onRefresh}
-          >
-            Refresh
-          </button>
-          <button className="button is-dark" onClick={onSignOut}>
+        <nav className="side-nav">
+          {dashboardViews.map((view) => (
+            <button
+              className={`side-nav-item ${
+                activeView === view.id ? "is-active" : ""
+              }`}
+              key={view.id}
+              onClick={() => setActiveView(view.id)}
+              type="button"
+            >
+              {view.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="profile-block">
+          <p className="eyebrow">Signed in</p>
+          <h2 className="title is-5 mb-1">{currentUser.name}</h2>
+          <p className="list-meta">
+            {currentUser.hospital_name}
+            <br />
+            {currentUser.role} · {currentUser.staff_type.replaceAll("_", " ")}
+          </p>
+          <button className="button is-dark is-fullwidth" onClick={onSignOut}>
             Sign out
           </button>
         </div>
-      </header>
+      </aside>
 
-      {errorMessage ? (
-        <div className="notification is-danger is-light">{errorMessage}</div>
-      ) : null}
-
-      <section className="columns is-multiline">
-        <div className="column is-4">
-          <div className="metric-card">
-            <p className="metric-label">Labs</p>
-            <p className="metric-value">{labs.length}</p>
+      <main className="portal-main">
+        <header className="portal-topbar">
+          <div>
+            <p className="eyebrow">{selectedLabName}</p>
+            <h2 className="title is-3 mb-1">
+              {activeView === "overview"
+                ? "Service dashboard"
+                : activeView === "assignments"
+                  ? "Training due and renewal planning"
+                  : activeView === "templates"
+                    ? "Digital form templates"
+                    : activeView === "records"
+                      ? "Completed and in-progress records"
+                      : "Lab section directory"}
+            </h2>
           </div>
-        </div>
-        <div className="column is-4">
-          <div className="metric-card">
-            <p className="metric-label">Active templates</p>
-            <p className="metric-value">{activeTemplateCount}</p>
+
+          <div className="buttons">
+            <button
+              className={`button is-light ${isLoading ? "is-loading" : ""}`}
+              onClick={onRefresh}
+              type="button"
+            >
+              Refresh data
+            </button>
           </div>
-        </div>
-        <div className="column is-4">
-          <div className="metric-card accent">
-            <p className="metric-label">Due within 30 days</p>
-            <p className="metric-value">{dueSoonCount}</p>
+        </header>
+
+        {errorMessage ? (
+          <div className="notification is-danger is-light">
+            {errorMessage}
           </div>
-        </div>
-      </section>
+        ) : null}
 
-      <section className="columns is-multiline">
-        <div className="column is-6">
-          <section className="panel-card">
-            <div className="panel-heading-row">
-              <h2 className="title is-5">Training due soon</h2>
-              <span className="tag is-warning is-light">
-                {assignments.length} tracked
-              </span>
+        <DashboardMetrics
+          labCount={labs.length}
+          activeTemplateCount={activeTemplateCount}
+          dueSoonCount={dueSoonCount}
+          activeAssignmentCount={filteredAssignments.length}
+        />
+
+        {activeView === "overview" ? (
+          <section className="columns is-multiline">
+            <div className="column is-7-desktop">
+              <TrainingAssignmentsPanel
+                assignments={filteredAssignments}
+                selectedLabName={selectedLabName}
+              />
             </div>
-            <div className="scroll-list">
-              {assignments.length === 0 ? (
-                <p className="empty-state">
-                  No assignment deadlines returned yet.
-                </p>
-              ) : (
-                assignments.map((assignment) => {
-                  const daysLeft = getDaysUntil(assignment.next_due_at);
-                  return (
-                    <article className="list-card" key={assignment.id}>
-                      <div>
-                        <h3 className="list-title">{assignment.template_name}</h3>
-                        <p className="list-meta">
-                          {assignment.trainee_name} · {assignment.lab_name}
-                        </p>
-                      </div>
-                      <span
-                        className={`tag ${
-                          daysLeft <= 30 ? "is-danger" : "is-success"
-                        } is-light`}
-                      >
-                        {daysLeft} days
-                      </span>
-                    </article>
-                  );
-                })
-              )}
+            <div className="column is-5-desktop">
+              <LabsPanel
+                labs={labs}
+                selectedLabId={selectedLabId}
+                onSelectLab={setSelectedLabId}
+              />
+            </div>
+            <div className="column is-6-desktop">
+              <TemplatesPanel templates={filteredTemplates} />
+            </div>
+            <div className="column is-6-desktop">
+              <TrainingRecordsPanel records={filteredRecords} />
             </div>
           </section>
-        </div>
+        ) : null}
 
-        <div className="column is-6">
-          <section className="panel-card">
-            <div className="panel-heading-row">
-              <h2 className="title is-5">Template library</h2>
-              <span className="tag is-info is-light">{templates.length}</span>
-            </div>
-            <div className="scroll-list">
-              {templates.length === 0 ? (
-                <p className="empty-state">No templates available yet.</p>
-              ) : (
-                templates.map((template) => (
-                  <article className="list-card" key={template.id}>
-                    <div>
-                      <h3 className="list-title">{template.name}</h3>
-                      <p className="list-meta">
-                        {template.form_family_reference} · {template.lab_name} ·{" "}
-                        {template.target_staff_type.replaceAll("_", " ")}
-                      </p>
-                    </div>
-                    <span className="tag is-link is-light">
-                      v{template.latest_version_number || 1}
-                    </span>
-                  </article>
-                ))
-              )}
-            </div>
-          </section>
-        </div>
-      </section>
+        {activeView === "assignments" ? (
+          <TrainingAssignmentsPanel
+            assignments={filteredAssignments}
+            selectedLabName={selectedLabName}
+          />
+        ) : null}
 
-      <section className="columns is-multiline">
-        <div className="column is-7">
-          <section className="panel-card">
-            <div className="panel-heading-row">
-              <h2 className="title is-5">Recent training records</h2>
-              <span className="tag is-success is-light">{records.length}</span>
-            </div>
-            <div className="scroll-list">
-              {records.length === 0 ? (
-                <p className="empty-state">No training records returned yet.</p>
-              ) : (
-                records.map((record) => (
-                  <article className="list-card" key={record.id}>
-                    <div>
-                      <h3 className="list-title">{record.template_name}</h3>
-                      <p className="list-meta">
-                        {record.trainee_name} · {record.lab_name} · due{" "}
-                        {formatDate(record.expires_at)}
-                      </p>
-                    </div>
-                    <span className="tag is-primary is-light">
-                      {record.status}
-                    </span>
-                  </article>
-                ))
-              )}
-            </div>
-          </section>
-        </div>
+        {activeView === "templates" ? (
+          <TemplatesPanel templates={filteredTemplates} />
+        ) : null}
 
-        <div className="column is-5">
-          <section className="panel-card">
-            <h2 className="title is-5">Lab sections</h2>
-            <div className="lab-grid">
-              {labs.length === 0 ? (
-                <p className="empty-state">No labs returned yet.</p>
-              ) : (
-                labs.map((lab) => (
-                  <div className="lab-chip" key={lab.id}>
-                    <strong>{lab.name}</strong>
-                    <small>{lab.hospital_name}</small>
-                    {lab.is_poc ? (
-                      <span className="tag is-warning is-light">POC</span>
-                    ) : null}
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
-        </div>
-      </section>
+        {activeView === "records" ? (
+          <TrainingRecordsPanel records={filteredRecords} />
+        ) : null}
+
+        {activeView === "labs" ? (
+          <LabsPanel
+            labs={labs}
+            selectedLabId={selectedLabId}
+            onSelectLab={setSelectedLabId}
+          />
+        ) : null}
+      </main>
     </div>
   );
 }

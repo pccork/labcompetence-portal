@@ -11,7 +11,9 @@ export interface LabSummary {
 export interface TemplateSummary {
   id: number;
   name: string;
+  lab_id: number;
   lab_name: string;
+  lab_hospital_id: number;
   lab_hospital_name: string;
   form_family_reference: string;
   template_kind: string;
@@ -22,11 +24,15 @@ export interface TemplateSummary {
 
 export interface TrainingAssignmentSummary {
   id: number;
+  user_id: number;
   trainee_name: string;
   trainee_email: string;
   staff_type: string;
+  template_id: number;
   template_name: string;
+  lab_id: number;
   lab_name: string;
+  lab_hospital_id: number;
   lab_hospital_name: string;
   renewal_interval_months: number;
   next_due_at: string;
@@ -35,11 +41,15 @@ export interface TrainingAssignmentSummary {
 
 export interface TrainingRecordSummary {
   id: number;
+  trainee_id: number;
   trainee_name: string;
   trainee_email: string;
   trainee_staff_type: string;
+  template_id: number;
   template_name: string;
+  lab_id: number;
   lab_name: string;
+  lab_hospital_id: number;
   lab_hospital_name: string;
   status: string;
   expires_at: string;

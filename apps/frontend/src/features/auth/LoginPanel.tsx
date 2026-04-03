@@ -35,9 +35,12 @@ export function LoginPanel({ onLogin, errorMessage }: LoginPanelProps) {
                   }}
                 >
                   <div className="field">
-                    <label className="label">Email</label>
+                    <label className="label" htmlFor="login-email">
+                      Email
+                    </label>
                     <div className="control">
                       <input
+                        id="login-email"
                         className="input is-medium"
                         type="email"
                         value={email}
@@ -47,9 +50,12 @@ export function LoginPanel({ onLogin, errorMessage }: LoginPanelProps) {
                   </div>
 
                   <div className="field">
-                    <label className="label">Password</label>
+                    <label className="label" htmlFor="login-password">
+                      Password
+                    </label>
                     <div className="control">
                       <input
+                        id="login-password"
                         className="input is-medium"
                         type="password"
                         value={password}

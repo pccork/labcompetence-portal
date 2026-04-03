@@ -1,3 +1,4 @@
+import cors from "@fastify/cors";
 import Fastify from "fastify";
 
 import { env } from "./config/env";
@@ -21,6 +22,9 @@ export async function buildServer() {
     logger: true,
   });
 
+  await app.register(cors, {
+    origin: ["http://localhost:5173"],
+  });
   await app.register(postgresPlugin);
   await app.register(authPlugin);
   await app.register(authRoutes);
