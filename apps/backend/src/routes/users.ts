@@ -1,9 +1,13 @@
 import { FastifyPluginAsync } from "fastify";
-import { Role } from "shared-types";
+import {
+  Role,
+  StaffType,
+} from "shared-types";
 
 import {
   canAccessHospital,
   getHospitalAccessScope,
+  resolveScopedHospitalId,
 } from "../services/access-policy-service";
 import { findHospitalById } from "../services/hospital-service";
 import {
@@ -22,6 +26,7 @@ interface CreateUserBody {
     email?: string;
     password?: string;
     role?: string;
+    staffType?: string;
   };
 }
 
@@ -38,6 +43,7 @@ interface UpdatePasswordBody {
 }
 
 const allowedRoles = new Set<string>(Object.values(Role));
+const allowedStaffTypes = new Set<string>(Object.values(StaffType));
 
 const userRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get(
@@ -60,7 +66,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
 
       const users = await listUsers(
         fastify.db,
-        scope.homeHospitalId
+        resolveScopedHospitalId(scope)
       );
 
       return { users };
@@ -81,6 +87,10 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       const email = request.body.email?.trim().toLowerCase();
       const password = request.body.password?.trim();
       const role = request.body.role?.trim().toLowerCase();
+      const staffType = (
+        request.body.staffType?.trim().toLowerCase() ||
+        StaffType.BASIC_GRADE_SCIENTIST
+      );
 
       if (!Number.isInteger(hospitalId) || hospitalId <= 0) {
         return reply
@@ -102,6 +112,12 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!role || !allowedRoles.has(role)) {
         return reply.status(400).send({ message: "Valid role is required" });
+      }
+
+      if (!allowedStaffTypes.has(staffType)) {
+        return reply
+          .status(400)
+          .send({ message: "Valid staffType is required" });
       }
 
       const hospital = await findHospitalById(fastify.db, hospitalId);
@@ -132,7 +148,8 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
           name,
           email,
           password,
-          role as Role
+          role as Role,
+          staffType as StaffType
         );
 
         return reply.status(201).send({ user });
@@ -202,6 +219,10 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       const name = request.body.name?.trim();
       const email = request.body.email?.trim().toLowerCase();
       const role = request.body.role?.trim().toLowerCase();
+      const staffType = (
+        request.body.staffType?.trim().toLowerCase() ||
+        StaffType.BASIC_GRADE_SCIENTIST
+      );
 
       if (!Number.isInteger(userId) || userId <= 0) {
         return reply.status(400).send({ message: "Invalid user id" });
@@ -223,6 +244,12 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!role || !allowedRoles.has(role)) {
         return reply.status(400).send({ message: "Valid role is required" });
+      }
+
+      if (!allowedStaffTypes.has(staffType)) {
+        return reply
+          .status(400)
+          .send({ message: "Valid staffType is required" });
       }
 
       const hospital = await findHospitalById(fastify.db, hospitalId);
@@ -262,7 +289,8 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
           hospitalId,
           name,
           email,
-          role as Role
+          role as Role,
+          staffType as StaffType
         );
 
         if (!user) {

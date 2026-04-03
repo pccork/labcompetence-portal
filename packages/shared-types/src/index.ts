@@ -16,3 +16,12 @@ export enum PocTrainingRequestStatus {
   SCHEDULED = "scheduled",
   CANCELLED = "cancelled",
 }
+
+export enum StaffType {
+  TRAINING_COORDINATOR = "training_coordinator",
+  SENIOR_MEDICAL_SCIENTIST = "senior_medical_scientist",
+  BASIC_GRADE_SCIENTIST = "basic_grade_scientist",
+  MEDICAL_LABORATORY_AIDE = "medical_laboratory_aide",
+  POCT_SCIENTIST = "poct_scientist",
+  POCT_MEDICAL_NURSING = "poct_medical_nursing",
+}

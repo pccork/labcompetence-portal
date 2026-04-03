@@ -7,7 +7,9 @@ import {
 import {
   canAccessHospital,
   getHospitalAccessScope,
+  resolveScopedHospitalId,
 } from "../services/access-policy-service";
+import { findTrainingAssignmentById } from "../services/training-assignment-service";
 import { findUserById } from "../services/user-service";
 import {
   createTrainingRecord,
@@ -27,6 +29,19 @@ interface CreateTrainingRecordBody {
   Body: {
     traineeId?: number;
     templateVersionId?: number;
+    assignedTrainerId?: number | null;
+    trainingAssignmentId?: number | null;
+    scheduledAt?: string | null;
+    completedAt?: string | null;
+    traineeSignedAt?: string | null;
+    assessmentPayloadJson?: Record<string, unknown>;
+    specimens?: Array<{
+      specimenLabel?: string;
+      specimenType?: string | null;
+      analyserReference?: string | null;
+      processedAt?: string | null;
+      resultSummary?: string | null;
+    }>;
     expiresAt?: string;
     status?: string;
   };
@@ -61,7 +76,7 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
 
       const records = await listTrainingRecords(
         fastify.db,
-        scope.homeHospitalId,
+        resolveScopedHospitalId(scope),
         scope.canAccessCrossHospitalPoc
       );
 
@@ -126,6 +141,22 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const traineeId = Number(request.body.traineeId);
       const templateVersionId = Number(request.body.templateVersionId);
+      const assignedTrainerId =
+        request.body.assignedTrainerId === null ||
+        request.body.assignedTrainerId === undefined
+          ? null
+          : Number(request.body.assignedTrainerId);
+      const trainingAssignmentId =
+        request.body.trainingAssignmentId === null ||
+        request.body.trainingAssignmentId === undefined
+          ? null
+          : Number(request.body.trainingAssignmentId);
+      const scheduledAt = request.body.scheduledAt ?? null;
+      const completedAt = request.body.completedAt ?? null;
+      const traineeSignedAt = request.body.traineeSignedAt ?? null;
+      const assessmentPayloadJson =
+        request.body.assessmentPayloadJson ?? {};
+      const specimens = request.body.specimens ?? [];
       const expiresAt = request.body.expiresAt;
       const status = request.body.status?.trim().toLowerCase();
 
@@ -147,6 +178,60 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (status && !allowedStatuses.has(status)) {
         return reply.status(400).send({ message: "Valid status is required" });
+      }
+
+      if (
+        assignedTrainerId !== null &&
+        (!Number.isInteger(assignedTrainerId) || assignedTrainerId <= 0)
+      ) {
+        return reply
+          .status(400)
+          .send({ message: "Valid assignedTrainerId is required" });
+      }
+
+      if (
+        trainingAssignmentId !== null &&
+        (!Number.isInteger(trainingAssignmentId) ||
+          trainingAssignmentId <= 0)
+      ) {
+        return reply
+          .status(400)
+          .send({ message: "Valid trainingAssignmentId is required" });
+      }
+
+      if (scheduledAt && Number.isNaN(Date.parse(scheduledAt))) {
+        return reply
+          .status(400)
+          .send({ message: "Valid scheduledAt timestamp is required" });
+      }
+
+      if (completedAt && Number.isNaN(Date.parse(completedAt))) {
+        return reply
+          .status(400)
+          .send({ message: "Valid completedAt timestamp is required" });
+      }
+
+      if (traineeSignedAt && Number.isNaN(Date.parse(traineeSignedAt))) {
+        return reply
+          .status(400)
+          .send({ message: "Valid traineeSignedAt timestamp is required" });
+      }
+
+      for (const specimen of specimens) {
+        if (!specimen.specimenLabel?.trim()) {
+          return reply
+            .status(400)
+            .send({ message: "Each specimen needs a specimenLabel" });
+        }
+
+        if (
+          specimen.processedAt &&
+          Number.isNaN(Date.parse(specimen.processedAt))
+        ) {
+          return reply
+            .status(400)
+            .send({ message: "Valid specimen processedAt timestamps are required" });
+        }
       }
 
       const trainee = await findUserById(fastify.db, traineeId);
@@ -176,6 +261,47 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ message: "User not found" });
       }
 
+      if (assignedTrainerId !== null) {
+        const trainer = await findUserById(
+          fastify.db,
+          assignedTrainerId
+        );
+
+        if (!trainer) {
+          return reply.status(404).send({ message: "Trainer not found" });
+        }
+
+        if (!canAccessHospital(scope, trainer.hospital_id)) {
+          return reply.status(403).send({
+            message:
+              "You cannot assign a trainer across this hospital boundary",
+          });
+        }
+      }
+
+      if (trainingAssignmentId !== null) {
+        const assignment = await findTrainingAssignmentById(
+          fastify.db,
+          trainingAssignmentId
+        );
+
+        if (!assignment) {
+          return reply
+            .status(404)
+            .send({ message: "Training assignment not found" });
+        }
+
+        if (
+          assignment.user_id !== traineeId ||
+          assignment.template_id !== templateVersionScope.template_id
+        ) {
+          return reply.status(400).send({
+            message:
+              "Training assignment must belong to the same trainee and template",
+          });
+        }
+      }
+
       if (
         !canAccessHospital(scope, trainee.hospital_id) ||
         !canAccessHospital(
@@ -194,14 +320,42 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
           fastify.db,
           status
             ? {
-                traineeId,
-                templateVersionId,
-                expiresAt,
-                status: status as AssignmentStatus,
-              }
+              traineeId,
+              templateVersionId,
+              assignedTrainerId,
+              trainingAssignmentId,
+              scheduledAt,
+              completedAt,
+              traineeSignedAt,
+              assessmentPayloadJson,
+              specimens: specimens.map((specimen) => ({
+                specimenLabel: specimen.specimenLabel!.trim(),
+                specimenType: specimen.specimenType?.trim() || null,
+                analyserReference:
+                  specimen.analyserReference?.trim() || null,
+                processedAt: specimen.processedAt || null,
+                resultSummary: specimen.resultSummary?.trim() || null,
+              })),
+              expiresAt,
+              status: status as AssignmentStatus,
+            }
             : {
                 traineeId,
                 templateVersionId,
+                assignedTrainerId,
+                trainingAssignmentId,
+                scheduledAt,
+                completedAt,
+                traineeSignedAt,
+                assessmentPayloadJson,
+                specimens: specimens.map((specimen) => ({
+                  specimenLabel: specimen.specimenLabel!.trim(),
+                  specimenType: specimen.specimenType?.trim() || null,
+                  analyserReference:
+                    specimen.analyserReference?.trim() || null,
+                  processedAt: specimen.processedAt || null,
+                  resultSummary: specimen.resultSummary?.trim() || null,
+                })),
                 expiresAt,
               }
         );
@@ -246,7 +400,7 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
       const records = await listTrainingRecordsExpiringWithinDays(
         fastify.db,
         days,
-        scope.homeHospitalId,
+        resolveScopedHospitalId(scope),
         scope.canAccessCrossHospitalPoc
       );
 

@@ -29,11 +29,18 @@ async function seed() {
 
   await pool.query(
     `
-    INSERT INTO users (hospital_id, name, email, password, role)
-    VALUES ($1, $2, $3, $4, $5)
+    INSERT INTO users (hospital_id, name, email, password, role, staff_type)
+    VALUES ($1, $2, $3, $4, $5, $6)
     ON CONFLICT (email) DO NOTHING
     `,
-    [hospitalId, "Portal Admin", "admin@test.com", password, "admin"]
+    [
+      hospitalId,
+      "Portal Admin",
+      "admin@test.com",
+      password,
+      "admin",
+      "training_coordinator",
+    ]
   );
 
   console.log("Admin seeded (or already exists).");

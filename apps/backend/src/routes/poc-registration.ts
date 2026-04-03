@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from "fastify";
 import {
   PocTrainingRequestStatus,
   Role,
+  StaffType,
 } from "shared-types";
 
 import { findHospitalById } from "../services/hospital-service";
@@ -9,6 +10,7 @@ import { findLabById } from "../services/lab-service";
 import {
   canAccessHospital,
   getHospitalAccessScope,
+  resolveScopedHospitalId,
 } from "../services/access-policy-service";
 import {
   createPocRegistrationLink,
@@ -65,8 +67,14 @@ interface PocSelfRegisterRoute {
     name?: string;
     email?: string;
     password?: string;
+    staffType?: string;
   };
 }
+
+const allowedPocSelfRegistrationStaffTypes = new Set<string>([
+  StaffType.POCT_MEDICAL_NURSING,
+  StaffType.POCT_SCIENTIST,
+]);
 
 const pocRegistrationRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get(
@@ -229,6 +237,10 @@ const pocRegistrationRoutes: FastifyPluginAsync = async (fastify) => {
       const name = request.body.name?.trim();
       const email = request.body.email?.trim().toLowerCase();
       const password = request.body.password?.trim();
+      const staffType = (
+        request.body.staffType?.trim().toLowerCase() ||
+        StaffType.POCT_MEDICAL_NURSING
+      );
 
       if (!Number.isInteger(hospitalId) || hospitalId <= 0) {
         return reply
@@ -250,6 +262,13 @@ const pocRegistrationRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
+      if (!allowedPocSelfRegistrationStaffTypes.has(staffType)) {
+        return reply.status(400).send({
+          message:
+            "staffType must be poct_medical_nursing or poct_scientist",
+        });
+      }
+
       const hospital = await findHospitalById(fastify.db, hospitalId);
 
       if (!hospital) {
@@ -265,6 +284,7 @@ const pocRegistrationRoutes: FastifyPluginAsync = async (fastify) => {
             name,
             email,
             password,
+            staffType: staffType as StaffType,
           }
         );
 
@@ -311,7 +331,7 @@ const pocRegistrationRoutes: FastifyPluginAsync = async (fastify) => {
 
       const requests = await listPocTrainingRequests(
         fastify.db,
-        scope.homeHospitalId,
+        resolveScopedHospitalId(scope),
         scope.canAccessCrossHospitalPoc
       );
 

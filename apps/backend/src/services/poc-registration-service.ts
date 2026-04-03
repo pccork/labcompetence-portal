@@ -3,6 +3,7 @@ import { Pool } from "pg";
 import {
   PocTrainingRequestStatus,
   Role,
+  StaffType,
 } from "shared-types";
 
 import { Lab } from "./lab-service";
@@ -175,6 +176,7 @@ export async function registerTraineeFromPocLink(
     name: string;
     email: string;
     password: string;
+    staffType?: StaffType;
   }
 ) {
   const registrationLink = await findPocRegistrationLinkByCode(
@@ -201,7 +203,8 @@ export async function registerTraineeFromPocLink(
       input.name,
       input.email,
       input.password,
-      Role.STAFF
+      Role.STAFF,
+      input.staffType ?? StaffType.POCT_MEDICAL_NURSING
     );
 
     if (!user) {
@@ -287,8 +290,8 @@ export async function registerTraineeFromPocLink(
 
 export async function listPocTrainingRequests(
   db: Pool,
-  hospitalId: number,
-  includeCrossHospitalPoc: boolean
+  hospitalId?: number,
+  includeCrossHospitalPoc = false
 ) {
   const result = await db.query<PocTrainingRequest>(
     `
@@ -321,12 +324,13 @@ export async function listPocTrainingRequests(
     INNER JOIN hospitals lab_hospital ON lab_hospital.id = l.hospital_id
     LEFT JOIN users responder ON responder.id = ptr.responded_by
     WHERE (
-      l.hospital_id = $1
+      $1::int IS NULL
+      OR l.hospital_id = $1
       OR ($2 = true AND l.is_poc = true)
     )
     ORDER BY ptr.requested_at DESC
     `,
-    [hospitalId, includeCrossHospitalPoc]
+    [hospitalId ?? null, includeCrossHospitalPoc]
   );
 
   return result.rows;
