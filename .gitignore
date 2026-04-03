@@ -19,3 +19,7 @@ pnpm-debug.log*
 # IDE
 .vscode
 .codex
+
+# Local template samples
+apps/backend/template-samples/*.doc
+apps/backend/template-samples/*.docx
