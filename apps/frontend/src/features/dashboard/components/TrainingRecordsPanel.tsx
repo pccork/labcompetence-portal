@@ -172,7 +172,7 @@ export function TrainingRecordsPanel({
 
   return (
     <section className="columns is-multiline">
-      <div className="column is-5-desktop">
+      <div className="column is-6-desktop">
         <section className="panel-card">
           <div className="panel-heading-row">
             <div>
@@ -350,8 +350,8 @@ export function TrainingRecordsPanel({
               </div>
             </div>
 
-            <div className="columns is-mobile is-variable is-2">
-              <div className="column is-6">
+            <div className="columns is-multiline is-variable is-2 record-field-grid">
+              <div className="column is-6-tablet">
                 <label className="label" htmlFor="record-scheduled">
                   Scheduled date
                 </label>
@@ -364,7 +364,7 @@ export function TrainingRecordsPanel({
                 />
               </div>
 
-              <div className="column is-6">
+              <div className="column is-6-tablet">
                 <label className="label" htmlFor="record-completed">
                   Completed date
                 </label>
@@ -378,8 +378,8 @@ export function TrainingRecordsPanel({
               </div>
             </div>
 
-            <div className="columns is-mobile is-variable is-2">
-              <div className="column is-6">
+            <div className="columns is-multiline is-variable is-2 record-field-grid">
+              <div className="column is-6-tablet">
                 <label className="label" htmlFor="record-trainee-signed">
                   Trainee sign date
                 </label>
@@ -394,7 +394,7 @@ export function TrainingRecordsPanel({
                 />
               </div>
 
-              <div className="column is-6">
+              <div className="column is-6-tablet">
                 <label className="label" htmlFor="record-expires">
                   Expires date
                 </label>
@@ -427,8 +427,8 @@ export function TrainingRecordsPanel({
               </div>
             </div>
 
-            <div className="columns is-mobile is-variable is-2">
-              <div className="column is-6">
+            <div className="columns is-multiline is-variable is-2 record-field-grid">
+              <div className="column is-6-tablet">
                 <label className="label" htmlFor="record-specimen-one">
                   Specimen evidence 1
                 </label>
@@ -442,7 +442,7 @@ export function TrainingRecordsPanel({
                 />
               </div>
 
-              <div className="column is-6">
+              <div className="column is-6-tablet">
                 <label className="label" htmlFor="record-specimen-two">
                   Specimen evidence 2
                 </label>
@@ -501,7 +501,7 @@ export function TrainingRecordsPanel({
         </section>
       </div>
 
-      <div className="column is-7-desktop">
+      <div className="column is-6-desktop">
         <section className="panel-card">
           <div className="panel-heading-row">
             <div>

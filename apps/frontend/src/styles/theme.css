@@ -178,6 +178,8 @@ body {
   border-radius: 28px;
   padding: 1.5rem;
   height: 100%;
+  min-width: 0;
+  overflow: hidden;
   animation: rise-in 800ms ease-out;
 }
 
@@ -187,6 +189,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  min-width: 0;
 }
 
 .scroll-list {
@@ -204,11 +207,16 @@ body {
   background: #ffffff;
 }
 
+.list-card > div {
+  min-width: 0;
+}
+
 .list-title {
   color: var(--portal-ink);
   font-size: 1rem;
   font-weight: 800;
   margin-bottom: 0.25rem;
+  overflow-wrap: anywhere;
 }
 
 .list-meta,
@@ -216,6 +224,7 @@ body {
 .lab-chip small {
   color: var(--portal-slate);
   font-size: 0.92rem;
+  overflow-wrap: anywhere;
 }
 
 .lab-grid {
@@ -259,6 +268,23 @@ body {
   gap: 0.9rem;
 }
 
+.stacked-form .input,
+.stacked-form .textarea,
+.stacked-form .select,
+.stacked-form .select select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.stacked-form .select select {
+  text-overflow: ellipsis;
+}
+
+.record-field-grid {
+  margin-top: 0;
+}
+
 .user-list {
   max-height: 820px;
 }
@@ -268,7 +294,10 @@ body {
 }
 
 .template-schema-editor {
+  width: 100%;
   min-height: 260px;
+  max-width: 100%;
+  resize: vertical;
   font-family:
     SFMono-Regular,
     ui-monospace,
@@ -375,5 +404,9 @@ body {
   .panel-card,
   .metric-card {
     padding: 1.2rem;
+  }
+
+  .record-field-grid {
+    margin-bottom: 0;
   }
 }
