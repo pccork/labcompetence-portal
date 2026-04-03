@@ -14,6 +14,7 @@ import {
   fetchLabs,
   fetchTemplates,
   fetchTrainingAssignments,
+  fetchTrainingRecordDetail,
   fetchTrainingRecords,
   fetchUsers,
   HospitalSummary,
@@ -156,6 +157,9 @@ export function App() {
         await createTrainingRecord(token, input);
         await loadDashboard(token);
       }}
+      onFetchRecordDetail={(recordId: number) =>
+        fetchTrainingRecordDetail(token, recordId)
+      }
       onSignOut={handleSignOut}
       errorMessage={errorMessage}
       isLoading={isPending}

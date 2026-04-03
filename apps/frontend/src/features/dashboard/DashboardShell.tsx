@@ -9,6 +9,7 @@ import {
   LabSummary,
   TemplateSummary,
   TrainingAssignmentSummary,
+  TrainingRecordDetail,
   TrainingRecordSummary,
   UserSummary,
 } from "./api";
@@ -41,6 +42,9 @@ interface DashboardShellProps {
     input: CreateTrainingAssignmentInput
   ) => Promise<void>;
   onCreateRecord: (input: CreateTrainingRecordInput) => Promise<void>;
+  onFetchRecordDetail: (
+    recordId: number
+  ) => Promise<{ record: TrainingRecordDetail }>;
   onSignOut: () => void;
   errorMessage: string | null;
   isLoading: boolean;
@@ -75,6 +79,7 @@ export function DashboardShell({
   onCreateTemplate,
   onCreateAssignment,
   onCreateRecord,
+  onFetchRecordDetail,
   onSignOut,
   errorMessage,
   isLoading,
@@ -249,6 +254,7 @@ export function DashboardShell({
                 templates={filteredTemplates}
                 users={users}
                 onCreateRecord={onCreateRecord}
+                onFetchRecordDetail={onFetchRecordDetail}
               />
             </div>
           </section>
@@ -287,6 +293,7 @@ export function DashboardShell({
             templates={filteredTemplates}
             users={users}
             onCreateRecord={onCreateRecord}
+            onFetchRecordDetail={onFetchRecordDetail}
           />
         ) : null}
 

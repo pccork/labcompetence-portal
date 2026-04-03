@@ -7,6 +7,7 @@ import {
 
 import {
   CreateTrainingRecordInput,
+  TrainingRecordDetail,
   TemplateSummary,
   TrainingAssignmentSummary,
   TrainingRecordSummary,
@@ -15,6 +16,7 @@ import {
 import { ReportExportActions } from "./ReportExportActions";
 import {
   downloadCsvReport,
+  printTrainingRecordReport,
   printReportTable,
 } from "../../../shared/export/reportExport";
 
@@ -24,6 +26,9 @@ interface TrainingRecordsPanelProps {
   templates: TemplateSummary[];
   users: UserSummary[];
   onCreateRecord: (input: CreateTrainingRecordInput) => Promise<void>;
+  onFetchRecordDetail: (
+    recordId: number
+  ) => Promise<{ record: TrainingRecordDetail }>;
 }
 
 function formatDate(value: string | null) {
@@ -66,6 +71,7 @@ export function TrainingRecordsPanel({
   templates,
   users,
   onCreateRecord,
+  onFetchRecordDetail,
 }: TrainingRecordsPanelProps) {
   const sortedUsers = useMemo(
     () =>
@@ -586,9 +592,116 @@ export function TrainingRecordsPanel({
                     </p>
                   </div>
 
-                  <span className="tag is-primary is-light">
-                    {record.status}
-                  </span>
+                  <div className="record-card-actions">
+                    <span className="tag is-primary is-light">
+                      {record.status}
+                    </span>
+                    <button
+                      className="button is-small is-light"
+                      onClick={() => {
+                        void onFetchRecordDetail(record.id)
+                          .then(({ record: detail }) => {
+                            printTrainingRecordReport({
+                              title: detail.template_name,
+                              subtitle: `${detail.form_family_reference} · ${detail.lab_name} · version ${detail.version_number}`,
+                              generatedBy: detail.assigned_trainer_name
+                                ? `Trainer: ${detail.assigned_trainer_name}`
+                                : "Lab Competence Portal",
+                              details: [
+                                {
+                                  label: "Trainee",
+                                  value: detail.trainee_name,
+                                },
+                                {
+                                  label: "Trainee email",
+                                  value: detail.trainee_email,
+                                },
+                                {
+                                  label: "Staff type",
+                                  value: detail.trainee_staff_type.replaceAll(
+                                    "_",
+                                    " "
+                                  ),
+                                },
+                                {
+                                  label: "Hospital",
+                                  value: detail.trainee_hospital_name,
+                                },
+                                {
+                                  label: "Section",
+                                  value: detail.lab_name,
+                                },
+                                {
+                                  label: "Status",
+                                  value: detail.status,
+                                },
+                                {
+                                  label: "Trainer / reviewer",
+                                  value:
+                                    detail.assigned_trainer_name ||
+                                    "Not assigned",
+                                },
+                                {
+                                  label: "Scheduled date",
+                                  value: formatDate(detail.scheduled_at),
+                                },
+                                {
+                                  label: "Completed date",
+                                  value: formatDate(detail.completed_at),
+                                },
+                                {
+                                  label: "Trainee sign date",
+                                  value: formatDate(
+                                    detail.trainee_signed_at
+                                  ),
+                                },
+                                {
+                                  label: "Submitted date",
+                                  value: formatDate(detail.submitted_at),
+                                },
+                                {
+                                  label: "Expires date",
+                                  value: formatDate(detail.expires_at),
+                                },
+                              ],
+                              tables: [
+                                {
+                                  title: "Specimen evidence",
+                                  columns: [
+                                    "Specimen",
+                                    "Type",
+                                    "Analyser / section",
+                                    "Processed date",
+                                    "Result summary",
+                                  ],
+                                  rows: detail.specimens.map(
+                                    (specimen) => [
+                                      specimen.specimen_label,
+                                      specimen.specimen_type || "Not set",
+                                      specimen.analyser_reference ||
+                                        detail.lab_name,
+                                      formatDate(specimen.processed_at),
+                                      specimen.result_summary || "Not set",
+                                    ]
+                                  ),
+                                },
+                              ],
+                              jsonPayload: detail.assessment_payload_json,
+                            });
+                          })
+                          .catch((error) => {
+                            window.alert(
+                              error instanceof Error
+                                ? error.message
+                                : "Unable to load printable record"
+                            );
+                          });
+                      }}
+                      type="button"
+                    >
+                      Print form
+                    </button>
+                  </div>
                 </article>
               ))
             )}

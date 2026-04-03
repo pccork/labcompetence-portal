@@ -72,19 +72,49 @@ export interface TrainingAssignmentSummary {
 export interface TrainingRecordSummary {
   id: number;
   trainee_id: number;
+  trainee_hospital_id: number;
+  trainee_hospital_name: string;
   trainee_name: string;
   trainee_email: string;
   trainee_staff_type: string;
+  template_version_id: number;
   template_id: number;
   template_name: string;
+  form_family_reference: string;
+  template_kind: string;
+  template_target_staff_type: string;
+  version_number: number;
   lab_id: number;
   lab_name: string;
   lab_hospital_id: number;
   lab_hospital_name: string;
+  lab_is_poc: boolean;
+  assigned_trainer_id: number | null;
+  assigned_trainer_name: string | null;
+  training_assignment_id: number | null;
   status: string;
+  assessment_payload_json: Record<string, unknown>;
+  submitted_at: string;
   expires_at: string;
   scheduled_at: string | null;
   completed_at: string | null;
+  trainee_signed_at: string | null;
+  created_at: string;
+}
+
+export interface TrainingRecordSpecimenSummary {
+  id: number;
+  training_record_id: number;
+  specimen_label: string;
+  specimen_type: string | null;
+  analyser_reference: string | null;
+  processed_at: string | null;
+  result_summary: string | null;
+  created_at: string;
+}
+
+export interface TrainingRecordDetail extends TrainingRecordSummary {
+  specimens: TrainingRecordSpecimenSummary[];
 }
 
 export interface CreateTrainingAssignmentInput {
@@ -198,6 +228,17 @@ export async function createTrainingAssignment(
 export async function fetchTrainingRecords(token: string) {
   return apiRequest<{ records: TrainingRecordSummary[] }>(
     "/training-records",
+    {},
+    token
+  );
+}
+
+export async function fetchTrainingRecordDetail(
+  token: string,
+  recordId: number
+) {
+  return apiRequest<{ record: TrainingRecordDetail }>(
+    `/training-records/${recordId}`,
     {},
     token
   );
