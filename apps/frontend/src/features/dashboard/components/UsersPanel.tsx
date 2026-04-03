@@ -1,4 +1,9 @@
-import { useMemo, useState, useTransition } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
 
 import {
   HospitalSummary,
@@ -33,6 +38,26 @@ const staffTypeOptions = [
   { value: "poct_medical_nursing", label: "POCT Medical/Nursing/Midwifery" },
 ];
 
+const pocStaffTypes = new Set([
+  "poct_scientist",
+  "poct_medical_nursing",
+]);
+
+const directoryModes = [
+  {
+    value: "core",
+    label: "Core lab staff",
+    description: "Scientists, MLAs, trainers, and co-ordinators",
+  },
+  {
+    value: "poc",
+    label: "POC users",
+    description: "POCT nurses, medics, midwives, and POCT scientists",
+  },
+] as const;
+
+type DirectoryMode = (typeof directoryModes)[number]["value"];
+
 export function UsersPanel({
   hospitals,
   users,
@@ -44,16 +69,63 @@ export function UsersPanel({
   const [password, setPassword] = useState("password123");
   const [role, setRole] = useState("staff");
   const [staffType, setStaffType] = useState("basic_grade_scientist");
+  const [directoryMode, setDirectoryMode] = useState<DirectoryMode>("core");
+  const [staffTypeFilter, setStaffTypeFilter] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
   const [formMessage, setFormMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const sortedUsers = useMemo(
+  useEffect(() => {
+    const firstHospital = hospitals[0];
+
+    if (!firstHospital) {
+      return;
+    }
+
+    if (!hospitals.some((hospital) => hospital.id === hospitalId)) {
+      setHospitalId(firstHospital.id);
+    }
+  }, [hospitalId, hospitals]);
+
+  const visibleStaffTypeOptions = useMemo(
     () =>
-      [...users].sort((left, right) =>
-        left.name.localeCompare(right.name)
+      staffTypeOptions.filter((option) =>
+        directoryMode === "poc"
+          ? pocStaffTypes.has(option.value)
+          : !pocStaffTypes.has(option.value)
       ),
-    [users]
+    [directoryMode]
   );
+
+  const filteredUsers = useMemo(() => {
+    const normalizedSearchTerm = searchTerm.trim().toLowerCase();
+
+    return users
+      .filter((user) =>
+        directoryMode === "poc"
+          ? pocStaffTypes.has(user.staff_type)
+          : !pocStaffTypes.has(user.staff_type)
+      )
+      .filter((user) =>
+        staffTypeFilter === "all"
+          ? true
+          : user.staff_type === staffTypeFilter
+      )
+      .filter((user) => {
+        if (!normalizedSearchTerm) {
+          return true;
+        }
+
+        return `${user.name} ${user.email} ${user.hospital_name}`
+          .toLowerCase()
+          .includes(normalizedSearchTerm);
+      })
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }, [directoryMode, searchTerm, staffTypeFilter, users]);
+
+  useEffect(() => {
+    setStaffTypeFilter("all");
+  }, [directoryMode]);
 
   return (
     <section className="columns is-multiline">
@@ -224,18 +296,78 @@ export function UsersPanel({
           <div className="panel-heading-row">
             <div>
               <p className="panel-kicker">Staff directory</p>
-              <h2 className="title is-5">All users</h2>
+              <h2 className="title is-5">
+                {directoryMode === "poc"
+                  ? "POC users"
+                  : "Core lab staff"}
+              </h2>
             </div>
             <span className="tag is-success is-light">
-              {sortedUsers.length} users
+              {filteredUsers.length} shown
             </span>
           </div>
 
+          <div className="directory-controls">
+            <div className="mode-toggle">
+              {directoryModes.map((mode) => (
+                <button
+                  key={mode.value}
+                  type="button"
+                  className={`mode-toggle-button ${
+                    directoryMode === mode.value ? "is-active" : ""
+                  }`}
+                  onClick={() => setDirectoryMode(mode.value)}
+                >
+                  <strong>{mode.label}</strong>
+                  <small>{mode.description}</small>
+                </button>
+              ))}
+            </div>
+
+            <div className="columns is-mobile is-variable is-2">
+              <div className="column is-7">
+                <label className="label" htmlFor="user-search">
+                  Search
+                </label>
+                <input
+                  id="user-search"
+                  className="input"
+                  type="search"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Search name, email, hospital"
+                />
+              </div>
+
+              <div className="column is-5">
+                <label className="label" htmlFor="staff-type-filter">
+                  Staff type
+                </label>
+                <div className="select is-fullwidth">
+                  <select
+                    id="staff-type-filter"
+                    value={staffTypeFilter}
+                    onChange={(event) =>
+                      setStaffTypeFilter(event.target.value)
+                    }
+                  >
+                    <option value="all">All</option>
+                    {visibleStaffTypeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="scroll-list user-list">
-            {sortedUsers.length === 0 ? (
+            {filteredUsers.length === 0 ? (
               <p className="empty-state">No users returned yet.</p>
             ) : (
-              sortedUsers.map((user) => (
+              filteredUsers.map((user) => (
                 <article className="list-card" key={user.id}>
                   <div>
                     <h3 className="list-title">{user.name}</h3>

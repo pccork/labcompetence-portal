@@ -263,6 +263,46 @@ body {
   max-height: 820px;
 }
 
+.directory-controls {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.mode-toggle {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mode-toggle-button {
+  border: 1px solid var(--portal-border);
+  border-radius: 22px;
+  padding: 0.95rem 1rem;
+  background: #fff;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.mode-toggle-button small {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--portal-slate);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.mode-toggle-button.is-active {
+  border-color: rgba(15, 118, 110, 0.42);
+  box-shadow: 0 16px 28px rgba(15, 118, 110, 0.12);
+  transform: translateY(-1px);
+}
+
 .button.is-link {
   background: linear-gradient(135deg, var(--portal-sea), var(--portal-leaf));
 }
@@ -293,6 +333,10 @@ body {
 
   .side-nav {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mode-toggle {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .portal-topbar {
