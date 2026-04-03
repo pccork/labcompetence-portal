@@ -205,7 +205,7 @@ export function UsersPanel({
                 type="text"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                placeholder="e.g. Emer Groarke"
+                placeholder="e.g. Jack Kenny"
               />
             </div>
 
