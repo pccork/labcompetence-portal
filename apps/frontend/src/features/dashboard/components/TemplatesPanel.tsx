@@ -1,4 +1,5 @@
 import {
+  type FormEvent,
   useEffect,
   useMemo,
   useState,
@@ -88,6 +89,7 @@ export function TemplatesPanel({
   onArchiveTemplate,
   onFetchTemplateDetail,
 }: TemplatesPanelProps) {
+  const [isExpandedEditorOpen, setIsExpandedEditorOpen] = useState(false);
   const [labId, setLabId] = useState(() => labs[0]?.id || 1);
   const [name, setName] = useState("FOR-CUH-PAT-2 New Section");
   const [formFamilyReference, setFormFamilyReference] =
@@ -133,8 +135,251 @@ export function TemplatesPanel({
       .sort((left, right) => left.name.localeCompare(right.name));
   }, [searchTerm, templates]);
 
+  const handleCreateTemplate = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setFormMessage(null);
+
+    let schemaJson: Record<string, unknown>;
+
+    try {
+      schemaJson = JSON.parse(schemaText) as Record<string, unknown>;
+    } catch {
+      setFormMessage("Schema JSON is not valid.");
+      return;
+    }
+
+    const selectedLab = labs.find((lab) => lab.id === labId);
+    const confirmed = window.confirm(
+      `Create template "${name}" for ${
+        selectedLab
+          ? `${selectedLab.department_name} / ${selectedLab.name}`
+          : "the selected training unit"
+      }?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    startTransition(() => {
+      void onCreateTemplate({
+        name,
+        labId,
+        formFamilyReference,
+        templateKind,
+        targetStaffType,
+        isActive,
+        schemaJson,
+      })
+        .then(() => {
+          setFormMessage("Template created successfully.");
+          setName("FOR-CUH-PAT-2 New Section");
+          setSchemaText(defaultSchemaText);
+          setIsExpandedEditorOpen(false);
+        })
+        .catch((error) => {
+          setFormMessage(
+            error instanceof Error
+              ? error.message
+              : "Unable to create template"
+          );
+        });
+    });
+  };
+
+  const renderTemplateSetupForm = (expanded = false) => (
+    <form
+      className={`stacked-form ${expanded ? "template-setup-form-expanded" : ""}`}
+      onSubmit={handleCreateTemplate}
+    >
+      <div className="field">
+        <label className="label" htmlFor={expanded ? "template-lab-expanded" : "template-lab"}>
+          Lab section
+        </label>
+        <div className="select is-fullwidth">
+          <select
+            id={expanded ? "template-lab-expanded" : "template-lab"}
+            value={labId}
+            onChange={(event) => setLabId(Number(event.target.value))}
+          >
+            {labs.map((lab) => (
+              <option key={lab.id} value={lab.id}>
+                {lab.hospital_name} · {lab.department_name} / {lab.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="field">
+        <label
+          className="label"
+          htmlFor={expanded ? "template-name-expanded" : "template-name"}
+        >
+          Template name
+        </label>
+        <input
+          id={expanded ? "template-name-expanded" : "template-name"}
+          className="input"
+          type="text"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+        />
+      </div>
+
+      <div className="columns is-mobile is-variable is-2">
+        <div className="column is-6">
+          <label
+            className="label"
+            htmlFor={expanded ? "template-family-expanded" : "template-family"}
+          >
+            Form family
+          </label>
+          <input
+            id={expanded ? "template-family-expanded" : "template-family"}
+            className="input"
+            type="text"
+            value={formFamilyReference}
+            onChange={(event) => setFormFamilyReference(event.target.value)}
+          />
+        </div>
+
+        <div className="column is-6">
+          <label
+            className="label"
+            htmlFor={expanded ? "template-kind-expanded" : "template-kind"}
+          >
+            Template type
+          </label>
+          <div className="select is-fullwidth">
+            <select
+              id={expanded ? "template-kind-expanded" : "template-kind"}
+              value={templateKind}
+              onChange={(event) => setTemplateKind(event.target.value)}
+            >
+              {templateKindOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="columns is-mobile is-variable is-2">
+        <div className="column is-8">
+          <label
+            className="label"
+            htmlFor={
+              expanded ? "template-staff-type-expanded" : "template-staff-type"
+            }
+          >
+            Target staff type
+          </label>
+          <div className="select is-fullwidth">
+            <select
+              id={
+                expanded ? "template-staff-type-expanded" : "template-staff-type"
+              }
+              value={targetStaffType}
+              onChange={(event) => setTargetStaffType(event.target.value)}
+            >
+              {staffTypeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="column is-4">
+          <label
+            className="label"
+            htmlFor={expanded ? "template-active-expanded" : "template-active"}
+          >
+            Active
+          </label>
+          <label className="checkbox template-active-toggle">
+            <input
+              id={expanded ? "template-active-expanded" : "template-active"}
+              type="checkbox"
+              checked={isActive}
+              onChange={(event) => setIsActive(event.target.checked)}
+            />{" "}
+            Publish
+          </label>
+        </div>
+      </div>
+
+      <div className="field">
+        <label
+          className="label"
+          htmlFor={expanded ? "template-schema-expanded" : "template-schema"}
+        >
+          Initial schema JSON
+        </label>
+        <textarea
+          id={expanded ? "template-schema-expanded" : "template-schema"}
+          className={`textarea template-schema-editor ${
+            expanded ? "template-schema-editor-expanded" : ""
+          }`}
+          value={schemaText}
+          onChange={(event) => setSchemaText(event.target.value)}
+          spellCheck="false"
+        />
+      </div>
+
+      {formMessage ? <p className="mini-note">{formMessage}</p> : null}
+
+      <div className={expanded ? "template-editor-actions" : undefined}>
+        {expanded ? (
+          <button
+            className="button is-light"
+            type="button"
+            onClick={() => setIsExpandedEditorOpen(false)}
+          >
+            Close full editor
+          </button>
+        ) : null}
+
+        <button
+          className={`button is-link ${expanded ? "" : "is-fullwidth"} ${
+            isPending ? "is-loading" : ""
+          }`}
+          type="submit"
+          disabled={isPending}
+        >
+          Create template
+        </button>
+      </div>
+    </form>
+  );
+
   return (
-    <section className="columns is-multiline">
+    <>
+      {isExpandedEditorOpen ? (
+        <div className="template-editor-overlay" role="dialog" aria-modal="true">
+          <div className="template-editor-modal panel-card">
+            <div className="panel-heading-row">
+              <div>
+                <p className="panel-kicker">Template setup</p>
+                <h2 className="title is-4">Full-screen template editor</h2>
+              </div>
+              <button
+                className="button is-light"
+                type="button"
+                onClick={() => setIsExpandedEditorOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+            {renderTemplateSetupForm(true)}
+          </div>
+        </div>
+      ) : null}
+      <section className="columns is-multiline">
       <div className="column is-5-desktop">
         <section className="panel-card">
           <div className="panel-heading-row">
@@ -142,196 +387,19 @@ export function TemplatesPanel({
               <p className="panel-kicker">Template setup</p>
               <h2 className="title is-5">Create section template</h2>
             </div>
-            <span className="tag is-info is-light">{labs.length} labs</span>
+            <div className="panel-heading-actions">
+              <button
+                className="button is-light is-small"
+                type="button"
+                onClick={() => setIsExpandedEditorOpen(true)}
+              >
+                Open full editor
+              </button>
+              <span className="tag is-info is-light">{labs.length} labs</span>
+            </div>
           </div>
 
-          <form
-            className="stacked-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setFormMessage(null);
-
-              let schemaJson: Record<string, unknown>;
-
-              try {
-                schemaJson = JSON.parse(schemaText) as Record<string, unknown>;
-              } catch {
-                setFormMessage("Schema JSON is not valid.");
-                return;
-              }
-
-              const selectedLab = labs.find((lab) => lab.id === labId);
-              const confirmed = window.confirm(
-                `Create template \"${name}\" for ${
-                  selectedLab
-                    ? `${selectedLab.department_name} / ${selectedLab.name}`
-                    : "the selected training unit"
-                }?`
-              );
-
-              if (!confirmed) {
-                return;
-              }
-
-              startTransition(() => {
-                void onCreateTemplate({
-                  name,
-                  labId,
-                  formFamilyReference,
-                  templateKind,
-                  targetStaffType,
-                  isActive,
-                  schemaJson,
-                })
-                  .then(() => {
-                    setFormMessage("Template created successfully.");
-                    setName("FOR-CUH-PAT-2 New Section");
-                    setSchemaText(defaultSchemaText);
-                  })
-                  .catch((error) => {
-                    setFormMessage(
-                      error instanceof Error
-                        ? error.message
-                        : "Unable to create template"
-                    );
-                  });
-              });
-            }}
-          >
-            <div className="field">
-              <label className="label" htmlFor="template-lab">
-                Lab section
-              </label>
-              <div className="select is-fullwidth">
-                <select
-                  id="template-lab"
-                  value={labId}
-                  onChange={(event) => setLabId(Number(event.target.value))}
-                >
-                  {labs.map((lab) => (
-                    <option key={lab.id} value={lab.id}>
-                      {lab.hospital_name} · {lab.department_name} /{" "}
-                      {lab.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="field">
-              <label className="label" htmlFor="template-name">
-                Template name
-              </label>
-              <input
-                id="template-name"
-                className="input"
-                type="text"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </div>
-
-            <div className="columns is-mobile is-variable is-2">
-              <div className="column is-6">
-                <label className="label" htmlFor="template-family">
-                  Form family
-                </label>
-                <input
-                  id="template-family"
-                  className="input"
-                  type="text"
-                  value={formFamilyReference}
-                  onChange={(event) =>
-                    setFormFamilyReference(event.target.value)
-                  }
-                />
-              </div>
-
-              <div className="column is-6">
-                <label className="label" htmlFor="template-kind">
-                  Template type
-                </label>
-                <div className="select is-fullwidth">
-                  <select
-                    id="template-kind"
-                    value={templateKind}
-                    onChange={(event) =>
-                      setTemplateKind(event.target.value)
-                    }
-                  >
-                    {templateKindOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div className="columns is-mobile is-variable is-2">
-              <div className="column is-8">
-                <label className="label" htmlFor="template-staff-type">
-                  Target staff type
-                </label>
-                <div className="select is-fullwidth">
-                  <select
-                    id="template-staff-type"
-                    value={targetStaffType}
-                    onChange={(event) =>
-                      setTargetStaffType(event.target.value)
-                    }
-                  >
-                    {staffTypeOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="column is-4">
-                <label className="label" htmlFor="template-active">
-                  Active
-                </label>
-                <label className="checkbox template-active-toggle">
-                  <input
-                    id="template-active"
-                    type="checkbox"
-                    checked={isActive}
-                    onChange={(event) => setIsActive(event.target.checked)}
-                  />{" "}
-                  Publish
-                </label>
-              </div>
-            </div>
-
-            <div className="field">
-              <label className="label" htmlFor="template-schema">
-                Initial schema JSON
-              </label>
-              <textarea
-                id="template-schema"
-                className="textarea template-schema-editor"
-                value={schemaText}
-                onChange={(event) => setSchemaText(event.target.value)}
-                spellCheck="false"
-              />
-            </div>
-
-            {formMessage ? <p className="mini-note">{formMessage}</p> : null}
-
-            <button
-              className={`button is-link is-fullwidth ${
-                isPending ? "is-loading" : ""
-              }`}
-              type="submit"
-              disabled={isPending}
-            >
-              Create template
-            </button>
-          </form>
+          {renderTemplateSetupForm()}
         </section>
       </div>
 
@@ -506,6 +574,7 @@ export function TemplatesPanel({
           </div>
         </section>
       </div>
-    </section>
+      </section>
+    </>
   );
 }
