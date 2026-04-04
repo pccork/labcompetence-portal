@@ -224,7 +224,11 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireAnyRole([Role.ADMIN, Role.TRAINER]),
+        fastify.requireAnyRole([
+          Role.ADMIN,
+          Role.TRAINER,
+          Role.STAFF,
+        ]),
       ],
     },
     async (request, reply) => {

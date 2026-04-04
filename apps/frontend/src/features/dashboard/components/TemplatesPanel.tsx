@@ -143,8 +143,6 @@ export function TemplatesPanel({
             <span className="tag is-info is-light">{labs.length} labs</span>
           </div>
 
-          {printMessage ? <p className="mini-note">{printMessage}</p> : null}
-
           <form
             className="stacked-form"
             onSubmit={(event) => {
@@ -333,6 +331,8 @@ export function TemplatesPanel({
               {filteredTemplates.length}
             </span>
           </div>
+
+          {printMessage ? <p className="mini-note">{printMessage}</p> : null}
 
           <div className="field">
             <label className="label" htmlFor="template-search">
