@@ -11,7 +11,7 @@ import {
   TemplateDetail,
   TemplateSummary,
 } from "../api";
-import { printTemplateReport } from "../../../shared/export/reportExport";
+import { downloadTemplateDocument } from "../../../shared/export/reportExport";
 
 interface TemplatesPanelProps {
   labs: LabSummary[];
@@ -381,7 +381,15 @@ export function TemplatesPanel({
                               const latestVersion =
                                 templateDetail.versions[0] || null;
 
-                              printTemplateReport({
+                              downloadTemplateDocument({
+                                filename: `${templateDetail.name
+                                  .toLowerCase()
+                                  .replaceAll(/[^a-z0-9]+/g, "-")
+                                  .replaceAll(/^-|-$/g, "") || "template"}-v${
+                                  latestVersion?.version_number ||
+                                  templateDetail.latest_version_number ||
+                                  1
+                                }.docx`,
                                 generatedBy: "Lab competence portal",
                                 title: templateDetail.name,
                                 subtitle: `${templateDetail.form_family_reference} · ${templateDetail.department_name} / ${templateDetail.lab_name} · ${templateDetail.lab_hospital_name}`,
@@ -437,7 +445,7 @@ export function TemplatesPanel({
                         });
                       }}
                     >
-                      Print form
+                      Download DOCX
                     </button>
                     <span className="tag is-link is-light">
                       v{template.latest_version_number || 1}

@@ -12,10 +12,7 @@ import {
   UserSummary,
 } from "../api";
 import { ReportExportActions } from "./ReportExportActions";
-import {
-  downloadCsvReport,
-  printReportTable,
-} from "../../../shared/export/reportExport";
+import { downloadListReportDocx } from "../../../shared/export/reportExport";
 
 interface TrainingAssignmentsPanelProps {
   assignments: TrainingAssignmentSummary[];
@@ -306,19 +303,15 @@ export function TrainingAssignmentsPanel({
               </span>
               <ReportExportActions
                 disabled={!visibleAssignments.length}
-                onDownloadCsv={() =>
-                  downloadCsvReport(
-                    `training-assignments-${selectedLabName
-                      .toLowerCase()
-                      .replaceAll(/[^a-z0-9]+/g, "-")
-                      .replaceAll(/^-|-$/g, "") || "all-sections"}.csv`,
-                    assignmentReportColumns,
-                    assignmentReportRows
-                  )
-                }
-                onPrint={() =>
-                  printReportTable(assignmentReportRows, {
+                onDownloadDocx={() =>
+                  downloadListReportDocx({
+                    filename:
+                      `training-assignments-${selectedLabName
+                        .toLowerCase()
+                        .replaceAll(/[^a-z0-9]+/g, "-")
+                        .replaceAll(/^-|-$/g, "") || "all-sections"}.docx`,
                     columns: assignmentReportColumns,
+                    rows: assignmentReportRows,
                     generatedBy: selectedLabName,
                     subtitle: `Current due-training list for ${
                       selectedLabName === "All sections"

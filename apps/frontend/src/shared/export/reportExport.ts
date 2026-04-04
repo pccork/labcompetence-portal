@@ -1,58 +1,63 @@
-interface PrintableReportOptions {
-  columns: string[];
-  generatedBy: string;
-  subtitle: string;
-  title: string;
-}
-
-interface PrintableTrainingRecordSection {
+interface DocumentDetail {
   label: string;
   value: string | number | null | undefined;
 }
 
-interface PrintableTrainingRecordTable {
+interface DocumentTable {
   columns: string[];
   rows: Array<Array<string | number | null | undefined>>;
   title: string;
 }
 
-interface PrintableTrainingRecordOptions {
-  details: PrintableTrainingRecordSection[];
+interface ListDocumentOptions {
+  columns: string[];
+  filename: string;
   generatedBy: string;
-  jsonPayload?: Record<string, unknown>;
+  rows: Array<Array<string | number | null | undefined>>;
   subtitle: string;
-  tables: PrintableTrainingRecordTable[];
   title: string;
 }
 
-interface PrintableTemplateOptions {
-  details: PrintableTrainingRecordSection[];
+interface TrainingRecordDocumentOptions {
+  details: DocumentDetail[];
+  filename: string;
+  generatedBy: string;
+  jsonPayload?: Record<string, unknown> | undefined;
+  subtitle: string;
+  tables: DocumentTable[];
+  title: string;
+}
+
+interface TemplateDocumentOptions {
+  details: DocumentDetail[];
+  filename: string;
   generatedBy: string;
   schemaJson?: Record<string, unknown> | undefined;
   subtitle: string;
   title: string;
 }
 
-function escapeCsvValue(value: string | number | null | undefined) {
-  const normalizedValue = value == null ? "" : String(value);
+const textEncoder = new TextEncoder();
+const crcTable = new Uint32Array(256);
 
-  return `"${normalizedValue.replaceAll('"', '""')}"`;
+for (let index = 0; index < crcTable.length; index += 1) {
+  let crc = index;
+
+  for (let bit = 0; bit < 8; bit += 1) {
+    crc = crc & 1 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1;
+  }
+
+  crcTable[index] = crc >>> 0;
 }
 
-function downloadBlob(content: BlobPart, filename: string, type: string) {
-  const blob = new Blob([content], { type });
-  const objectUrl = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-
-  anchor.href = objectUrl;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(objectUrl);
+function normalizeDocumentFilename(filename: string) {
+  const safeName = filename.trim() || "report.docx";
+  return safeName.toLowerCase().endsWith(".docx")
+    ? safeName
+    : `${safeName.replace(/\.+$/, "")}.docx`;
 }
 
-function escapeHtml(value: string | number | null | undefined) {
+function escapeXml(value: string | number | null | undefined) {
   const normalizedValue = value == null ? "" : String(value);
 
   return normalizedValue
@@ -60,475 +65,411 @@ function escapeHtml(value: string | number | null | undefined) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+    .replaceAll("'", "&apos;");
 }
 
-export function downloadCsvReport(
+function calculateCrc32(bytes: Uint8Array) {
+  let crc = 0xffffffff;
+
+  for (const byte of bytes) {
+    crc = crcTable[(crc ^ byte) & 0xff]! ^ (crc >>> 8);
+  }
+
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function createZipArchive(
+  files: Array<{ name: string; content: string | Uint8Array }>
+) {
+  const localChunks: Uint8Array[] = [];
+  const centralChunks: Uint8Array[] = [];
+  let localOffset = 0;
+
+  for (const file of files) {
+    const nameBytes = textEncoder.encode(file.name);
+    const contentBytes =
+      typeof file.content === "string"
+        ? textEncoder.encode(file.content)
+        : file.content;
+    const crc32 = calculateCrc32(contentBytes);
+
+    const localHeader = new Uint8Array(30 + nameBytes.length);
+    const localView = new DataView(localHeader.buffer);
+
+    localView.setUint32(0, 0x04034b50, true);
+    localView.setUint16(4, 20, true);
+    localView.setUint16(6, 0, true);
+    localView.setUint16(8, 0, true);
+    localView.setUint16(10, 0, true);
+    localView.setUint16(12, 0, true);
+    localView.setUint32(14, crc32, true);
+    localView.setUint32(18, contentBytes.length, true);
+    localView.setUint32(22, contentBytes.length, true);
+    localView.setUint16(26, nameBytes.length, true);
+    localView.setUint16(28, 0, true);
+    localHeader.set(nameBytes, 30);
+
+    localChunks.push(localHeader, contentBytes);
+
+    const centralHeader = new Uint8Array(46 + nameBytes.length);
+    const centralView = new DataView(centralHeader.buffer);
+
+    centralView.setUint32(0, 0x02014b50, true);
+    centralView.setUint16(4, 20, true);
+    centralView.setUint16(6, 20, true);
+    centralView.setUint16(8, 0, true);
+    centralView.setUint16(10, 0, true);
+    centralView.setUint16(12, 0, true);
+    centralView.setUint16(14, 0, true);
+    centralView.setUint32(16, crc32, true);
+    centralView.setUint32(20, contentBytes.length, true);
+    centralView.setUint32(24, contentBytes.length, true);
+    centralView.setUint16(28, nameBytes.length, true);
+    centralView.setUint16(30, 0, true);
+    centralView.setUint16(32, 0, true);
+    centralView.setUint16(34, 0, true);
+    centralView.setUint16(36, 0, true);
+    centralView.setUint32(38, 0, true);
+    centralView.setUint32(42, localOffset, true);
+    centralHeader.set(nameBytes, 46);
+
+    centralChunks.push(centralHeader);
+    localOffset += localHeader.length + contentBytes.length;
+  }
+
+  const centralSize = centralChunks.reduce(
+    (total, chunk) => total + chunk.length,
+    0
+  );
+  const outputLength = localOffset + centralSize + 22;
+  const output = new Uint8Array(outputLength);
+  let cursor = 0;
+
+  for (const chunk of localChunks) {
+    output.set(chunk, cursor);
+    cursor += chunk.length;
+  }
+
+  const centralOffset = cursor;
+
+  for (const chunk of centralChunks) {
+    output.set(chunk, cursor);
+    cursor += chunk.length;
+  }
+
+  const endRecord = new DataView(output.buffer, cursor, 22);
+  endRecord.setUint32(0, 0x06054b50, true);
+  endRecord.setUint16(4, 0, true);
+  endRecord.setUint16(6, 0, true);
+  endRecord.setUint16(8, files.length, true);
+  endRecord.setUint16(10, files.length, true);
+  endRecord.setUint32(12, centralSize, true);
+  endRecord.setUint32(16, centralOffset, true);
+  endRecord.setUint16(20, 0, true);
+
+  return output;
+}
+
+function downloadBinaryFile(
+  bytes: Uint8Array,
   filename: string,
-  columns: string[],
-  rows: Array<Array<string | number | null | undefined>>
+  type: string
 ) {
-  const csvContent = [
-    columns.map(escapeCsvValue).join(","),
-    ...rows.map((row) => row.map(escapeCsvValue).join(",")),
-  ].join("\n");
+  const blob = new Blob([bytes.slice().buffer], { type });
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
 
-  downloadBlob(csvContent, filename, "text/csv;charset=utf-8");
+  anchor.href = objectUrl;
+  anchor.download = normalizeDocumentFilename(filename);
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
 }
 
-export function printReportTable(
-  rows: Array<Array<string | number | null | undefined>>,
-  options: PrintableReportOptions
-) {
-  const printWindow = window.open("", "_blank", "noopener,noreferrer");
+function sanitizeParagraphValue(value: string | number | null | undefined) {
+  const normalizedValue = value == null ? "Not set" : String(value).trim();
+  return normalizedValue || "Not set";
+}
 
-  if (!printWindow) {
-    window.print();
-    return;
-  }
+function createParagraph(text: string, style = "BodyText") {
+  const chunks = text.split("\n");
 
-  const generatedAt = new Date().toLocaleString("en-IE", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-
-  const headerCells = options.columns
-    .map((column) => `<th>${escapeHtml(column)}</th>`)
+  const runs = chunks
+    .map(
+      (chunk, index) => `
+        <w:r>
+          <w:t xml:space="preserve">${escapeXml(chunk)}</w:t>
+        </w:r>
+        ${index < chunks.length - 1 ? "<w:r><w:br/></w:r>" : ""}
+      `
+    )
     .join("");
-  const bodyRows = rows.length
-    ? rows
+
+  return `
+    <w:p>
+      <w:pPr><w:pStyle w:val="${style}"/></w:pPr>
+      ${runs}
+    </w:p>
+  `;
+}
+
+function createDetailParagraph(detail: DocumentDetail) {
+  return createParagraph(
+    `${detail.label}: ${sanitizeParagraphValue(detail.value)}`,
+    "BodyText"
+  );
+}
+
+function createTable(table: DocumentTable) {
+  const headerRow = `
+    <w:tr>
+      ${table.columns
         .map(
-          (row) =>
-            `<tr>${row
-              .map((value) => `<td>${escapeHtml(value)}</td>`)
-              .join("")}</tr>`
+          (column) => `
+            <w:tc>
+              <w:tcPr>
+                <w:tcW w:w="2400" w:type="dxa"/>
+                <w:shd w:fill="D9F0EE"/>
+              </w:tcPr>
+              ${createParagraph(column, "TableHeader")}
+            </w:tc>
+          `
         )
-        .join("")
-    : `<tr><td colspan="${options.columns.length}">No rows available.</td></tr>`;
+        .join("")}
+    </w:tr>
+  `;
 
-  printWindow.document.write(`
-    <!doctype html>
-    <html lang="en">
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>${escapeHtml(options.title)}</title>
-        <style>
-          body {
-            margin: 32px;
-            color: #102a43;
-            font-family: Avenir Next, Avenir, Nunito Sans, Trebuchet MS, sans-serif;
-          }
-
-          .report-meta {
-            margin-bottom: 24px;
-            color: #486581;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-          }
-
-          h1 {
-            margin: 0 0 8px;
-            font-size: 28px;
-            letter-spacing: -0.04em;
-          }
-
-          p {
-            margin: 0 0 16px;
-            color: #486581;
-          }
-
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-          }
-
-          th,
-          td {
-            padding: 12px 10px;
-            border-bottom: 1px solid #d9e2ec;
-            text-align: left;
-            vertical-align: top;
-            overflow-wrap: anywhere;
-          }
-
-          th {
-            background: #f0fdfa;
-            color: #0f766e;
-            font-size: 11px;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-          }
-
-          @media print {
-            body {
-              margin: 18mm 14mm;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="report-meta">
-          Generated ${escapeHtml(generatedAt)} · ${escapeHtml(options.generatedBy)}
-        </div>
-        <h1>${escapeHtml(options.title)}</h1>
-        <p>${escapeHtml(options.subtitle)}</p>
-        <table>
-          <thead>
-            <tr>${headerCells}</tr>
-          </thead>
-          <tbody>${bodyRows}</tbody>
-        </table>
-        <script>
-          window.onload = () => {
-            window.print();
-            window.onafterprint = () => window.close();
-          };
-        </script>
-      </body>
-    </html>
-  `);
-  printWindow.document.close();
-}
-
-export function printTrainingRecordReport(
-  options: PrintableTrainingRecordOptions
-) {
-  const printWindow = window.open("", "_blank", "noopener,noreferrer");
-
-  if (!printWindow) {
-    window.print();
-    return;
-  }
-
-  const generatedAt = new Date().toLocaleString("en-IE", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-
-  const detailCards = options.details
+  const bodyRows = (
+    table.rows.length > 0
+      ? table.rows
+      : [table.columns.map(() => "No rows available.")]
+  )
     .map(
-      (detail) => `
-        <article class="detail-card">
-          <p class="detail-label">${escapeHtml(detail.label)}</p>
-          <p class="detail-value">${escapeHtml(detail.value)}</p>
-        </article>
-      `
-    )
-    .join("");
-
-  const tableSections = options.tables
-    .map((table) => {
-      const headerCells = table.columns
-        .map((column) => `<th>${escapeHtml(column)}</th>`)
-        .join("");
-      const bodyRows = table.rows.length
-        ? table.rows
+      (row) => `
+        <w:tr>
+          ${row
             .map(
-              (row) =>
-                `<tr>${row
-                  .map((value) => `<td>${escapeHtml(value)}</td>`)
-                  .join("")}</tr>`
+              (value) => `
+                <w:tc>
+                  <w:tcPr><w:tcW w:w="2400" w:type="dxa"/></w:tcPr>
+                  ${createParagraph(sanitizeParagraphValue(value), "BodyText")}
+                </w:tc>
+              `
             )
-            .join("")
-        : `<tr><td colspan="${table.columns.length}">No rows available.</td></tr>`;
-
-      return `
-        <section class="report-section">
-          <h2>${escapeHtml(table.title)}</h2>
-          <table>
-            <thead><tr>${headerCells}</tr></thead>
-            <tbody>${bodyRows}</tbody>
-          </table>
-        </section>
-      `;
-    })
+            .join("")}
+        </w:tr>
+      `
+    )
     .join("");
 
-  const jsonPayload = options.jsonPayload
-    ? `<section class="report-section">
-        <h2>Assessment payload</h2>
-        <pre>${escapeHtml(JSON.stringify(options.jsonPayload, null, 2))}</pre>
-      </section>`
-    : "";
-
-  printWindow.document.write(`
-    <!doctype html>
-    <html lang="en">
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>${escapeHtml(options.title)}</title>
-        <style>
-          body {
-            margin: 32px;
-            color: #102a43;
-            font-family: Avenir Next, Avenir, Nunito Sans, Trebuchet MS, sans-serif;
-          }
-
-          .report-meta,
-          .detail-label {
-            color: #486581;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-          }
-
-          h1 {
-            margin: 0 0 8px;
-            font-size: 30px;
-            letter-spacing: -0.04em;
-          }
-
-          h2 {
-            margin: 0 0 14px;
-            font-size: 18px;
-            letter-spacing: -0.03em;
-          }
-
-          .report-subtitle {
-            margin: 0 0 24px;
-            color: #486581;
-          }
-
-          .detail-grid {
-            display: grid;
-            gap: 14px;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            margin: 28px 0;
-          }
-
-          .detail-card {
-            border: 1px solid #d9e2ec;
-            border-radius: 18px;
-            padding: 14px 16px;
-            background: #f8fafc;
-          }
-
-          .detail-label,
-          .detail-value {
-            margin: 0;
-          }
-
-          .detail-value {
-            margin-top: 8px;
-            font-size: 15px;
-            font-weight: 700;
-            overflow-wrap: anywhere;
-          }
-
-          .report-section {
-            margin-top: 30px;
-            page-break-inside: avoid;
-          }
-
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-          }
-
-          th,
-          td {
-            padding: 12px 10px;
-            border-bottom: 1px solid #d9e2ec;
-            text-align: left;
-            vertical-align: top;
-            overflow-wrap: anywhere;
-          }
-
-          th {
-            background: #f0fdfa;
-            color: #0f766e;
-            font-size: 11px;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-          }
-
-          pre {
-            margin: 0;
-            padding: 16px;
-            border-radius: 16px;
-            background: #0f172a;
-            color: #e2e8f0;
-            font-size: 12px;
-            white-space: pre-wrap;
-            overflow-wrap: anywhere;
-          }
-
-          @media print {
-            body {
-              margin: 18mm 14mm;
-            }
-
-            .detail-grid {
-              grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="report-meta">
-          Generated ${escapeHtml(generatedAt)} · ${escapeHtml(options.generatedBy)}
-        </div>
-        <h1>${escapeHtml(options.title)}</h1>
-        <p class="report-subtitle">${escapeHtml(options.subtitle)}</p>
-        <section class="detail-grid">${detailCards}</section>
-        ${tableSections}
-        ${jsonPayload}
-        <script>
-          window.onload = () => {
-            window.print();
-            window.onafterprint = () => window.close();
-          };
-        </script>
-      </body>
-    </html>
-  `);
-  printWindow.document.close();
+  return `
+    ${createParagraph(table.title, "Heading1")}
+    <w:tbl>
+      <w:tblPr>
+        <w:tblW w:w="0" w:type="auto"/>
+        <w:tblBorders>
+          <w:top w:val="single" w:sz="4" w:color="A8B8C7"/>
+          <w:left w:val="single" w:sz="4" w:color="A8B8C7"/>
+          <w:bottom w:val="single" w:sz="4" w:color="A8B8C7"/>
+          <w:right w:val="single" w:sz="4" w:color="A8B8C7"/>
+          <w:insideH w:val="single" w:sz="4" w:color="A8B8C7"/>
+          <w:insideV w:val="single" w:sz="4" w:color="A8B8C7"/>
+        </w:tblBorders>
+      </w:tblPr>
+      <w:tblGrid>
+        ${table.columns.map(() => '<w:gridCol w:w="2400"/>').join("")}
+      </w:tblGrid>
+      ${headerRow}
+      ${bodyRows}
+    </w:tbl>
+    ${createParagraph("", "BodyText")}
+  `;
 }
 
-export function printTemplateReport(options: PrintableTemplateOptions) {
-  const printWindow = window.open("", "_blank", "noopener,noreferrer");
+function buildDocumentXml(options: {
+  details?: DocumentDetail[];
+  jsonPayload?: Record<string, unknown> | undefined;
+  subtitle: string;
+  tables?: DocumentTable[];
+  title: string;
+}) {
+  const detailsXml = (options.details ?? [])
+    .map((detail) => createDetailParagraph(detail))
+    .join("");
 
-  if (!printWindow) {
-    window.print();
-    return;
-  }
+  const tablesXml = (options.tables ?? [])
+    .map((table) => createTable(table))
+    .join("");
 
+  const jsonXml = options.jsonPayload
+    ? `
+      ${createParagraph("Structured payload", "Heading1")}
+      ${createParagraph(JSON.stringify(options.jsonPayload, null, 2), "BodyText")}
+    `
+    : "";
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+      <w:body>
+        ${createParagraph(options.title, "Title")}
+        ${createParagraph(options.subtitle, "Subtitle")}
+        ${detailsXml}
+        ${tablesXml}
+        ${jsonXml}
+        <w:sectPr>
+          <w:pgSz w:w="11906" w:h="16838"/>
+          <w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/>
+        </w:sectPr>
+      </w:body>
+    </w:document>`;
+}
+
+function buildStylesXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+      <w:style w:type="paragraph" w:styleId="Title">
+        <w:name w:val="Title"/>
+        <w:rPr>
+          <w:b/>
+          <w:sz w:val="48"/>
+          <w:color w:val="102A43"/>
+        </w:rPr>
+      </w:style>
+      <w:style w:type="paragraph" w:styleId="Subtitle">
+        <w:name w:val="Subtitle"/>
+        <w:rPr>
+          <w:sz w:val="24"/>
+          <w:color w:val="486581"/>
+        </w:rPr>
+      </w:style>
+      <w:style w:type="paragraph" w:styleId="Heading1">
+        <w:name w:val="heading 1"/>
+        <w:rPr>
+          <w:b/>
+          <w:sz w:val="30"/>
+          <w:color w:val="0F766E"/>
+        </w:rPr>
+      </w:style>
+      <w:style w:type="paragraph" w:styleId="TableHeader">
+        <w:name w:val="Table Header"/>
+        <w:rPr>
+          <w:b/>
+          <w:sz w:val="20"/>
+          <w:color w:val="0F766E"/>
+        </w:rPr>
+      </w:style>
+      <w:style w:type="paragraph" w:styleId="BodyText">
+        <w:name w:val="Body Text"/>
+        <w:rPr>
+          <w:sz w:val="22"/>
+          <w:color w:val="102A43"/>
+        </w:rPr>
+      </w:style>
+    </w:styles>`;
+}
+
+function downloadDocxDocument(
+  filename: string,
+  documentXml: string
+) {
+  const archive = createZipArchive([
+    {
+      name: "[Content_Types].xml",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+          <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+          <Default Extension="xml" ContentType="application/xml"/>
+          <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+          <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+        </Types>`,
+    },
+    {
+      name: "_rels/.rels",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+          <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+        </Relationships>`,
+    },
+    {
+      name: "word/_rels/document.xml.rels",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+          <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+        </Relationships>`,
+    },
+    {
+      name: "word/document.xml",
+      content: documentXml,
+    },
+    {
+      name: "word/styles.xml",
+      content: buildStylesXml(),
+    },
+  ]);
+
+  downloadBinaryFile(
+    archive,
+    filename,
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  );
+}
+
+export function downloadListReportDocx(options: ListDocumentOptions) {
   const generatedAt = new Date().toLocaleString("en-IE", {
     dateStyle: "medium",
     timeStyle: "short",
   });
 
-  const detailCards = options.details
-    .map(
-      (detail) => `
-        <article class="detail-card">
-          <p class="detail-label">${escapeHtml(detail.label)}</p>
-          <p class="detail-value">${escapeHtml(detail.value)}</p>
-        </article>
-      `
-    )
-    .join("");
+  downloadDocxDocument(
+    options.filename,
+    buildDocumentXml({
+      title: options.title,
+      subtitle: `${options.subtitle}\nGenerated ${generatedAt} by ${options.generatedBy}`,
+      tables: [
+        {
+          title: options.title,
+          columns: options.columns,
+          rows: options.rows,
+        },
+      ],
+    })
+  );
+}
 
-  const schemaSection = options.schemaJson
-    ? `<section class="report-section">
-        <h2>Template schema</h2>
-        <pre>${escapeHtml(JSON.stringify(options.schemaJson, null, 2))}</pre>
-      </section>`
-    : "";
+export function downloadTrainingRecordDocument(
+  options: TrainingRecordDocumentOptions
+) {
+  const generatedAt = new Date().toLocaleString("en-IE", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 
-  printWindow.document.write(`
-    <!doctype html>
-    <html lang="en">
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>${escapeHtml(options.title)}</title>
-        <style>
-          body {
-            margin: 32px;
-            color: #102a43;
-            font-family: Avenir Next, Avenir, Nunito Sans, Trebuchet MS, sans-serif;
-          }
+  downloadDocxDocument(
+    options.filename,
+    buildDocumentXml({
+      title: options.title,
+      subtitle: `${options.subtitle}\nGenerated ${generatedAt} by ${options.generatedBy}`,
+      details: options.details,
+      tables: options.tables,
+      jsonPayload: options.jsonPayload,
+    })
+  );
+}
 
-          .report-meta,
-          .detail-label {
-            color: #486581;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-          }
+export function downloadTemplateDocument(options: TemplateDocumentOptions) {
+  const generatedAt = new Date().toLocaleString("en-IE", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 
-          h1 {
-            margin: 0 0 8px;
-            font-size: 30px;
-            letter-spacing: -0.04em;
-          }
-
-          h2 {
-            margin: 0 0 14px;
-            font-size: 18px;
-            letter-spacing: -0.03em;
-          }
-
-          .report-subtitle {
-            margin: 0 0 24px;
-            color: #486581;
-          }
-
-          .detail-grid {
-            display: grid;
-            gap: 14px;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            margin: 28px 0;
-          }
-
-          .detail-card {
-            border: 1px solid #d9e2ec;
-            border-radius: 18px;
-            padding: 14px 16px;
-            background: #f8fafc;
-          }
-
-          .detail-label,
-          .detail-value {
-            margin: 0;
-          }
-
-          .detail-value {
-            margin-top: 8px;
-            font-size: 15px;
-            font-weight: 700;
-            overflow-wrap: anywhere;
-          }
-
-          .report-section {
-            margin-top: 30px;
-            page-break-inside: avoid;
-          }
-
-          pre {
-            margin: 0;
-            padding: 16px;
-            border-radius: 16px;
-            background: #0f172a;
-            color: #e2e8f0;
-            font-size: 12px;
-            white-space: pre-wrap;
-            overflow-wrap: anywhere;
-          }
-
-          @media print {
-            body {
-              margin: 18mm 14mm;
-            }
-
-            .detail-grid {
-              grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="report-meta">
-          Generated ${escapeHtml(generatedAt)} · ${escapeHtml(options.generatedBy)}
-        </div>
-        <h1>${escapeHtml(options.title)}</h1>
-        <p class="report-subtitle">${escapeHtml(options.subtitle)}</p>
-        <section class="detail-grid">${detailCards}</section>
-        ${schemaSection}
-        <script>
-          window.onload = () => {
-            window.print();
-            window.onafterprint = () => window.close();
-          };
-        </script>
-      </body>
-    </html>
-  `);
-  printWindow.document.close();
+  downloadDocxDocument(
+    options.filename,
+    buildDocumentXml({
+      title: options.title,
+      subtitle: `${options.subtitle}\nGenerated ${generatedAt} by ${options.generatedBy}`,
+      details: options.details,
+      jsonPayload: options.schemaJson,
+    })
+  );
 }

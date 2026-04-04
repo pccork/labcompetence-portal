@@ -15,9 +15,8 @@ import {
 } from "../api";
 import { ReportExportActions } from "./ReportExportActions";
 import {
-  downloadCsvReport,
-  printTrainingRecordReport,
-  printReportTable,
+  downloadListReportDocx,
+  downloadTrainingRecordDocument,
 } from "../../../shared/export/reportExport";
 
 interface TrainingRecordsPanelProps {
@@ -554,16 +553,11 @@ export function TrainingRecordsPanel({
               </span>
               <ReportExportActions
                 disabled={!records.length}
-                onDownloadCsv={() =>
-                  downloadCsvReport(
-                    "training-records.csv",
-                    recordReportColumns,
-                    recordReportRows
-                  )
-                }
-                onPrint={() =>
-                  printReportTable(recordReportRows, {
+                onDownloadDocx={() =>
+                  downloadListReportDocx({
+                    filename: "training-records.docx",
                     columns: recordReportColumns,
+                    rows: recordReportRows,
                     generatedBy: "Lab Competence Portal",
                     subtitle:
                       "Current list of training records shown in the dashboard.",
@@ -603,7 +597,11 @@ export function TrainingRecordsPanel({
                       onClick={() => {
                         void onFetchRecordDetail(record.id)
                           .then(({ record: detail }) => {
-                            printTrainingRecordReport({
+                            downloadTrainingRecordDocument({
+                              filename: `${detail.template_name
+                                .toLowerCase()
+                                .replaceAll(/[^a-z0-9]+/g, "-")
+                                .replaceAll(/^-|-$/g, "") || "training-record"}-${detail.id}.docx`,
                               title: detail.template_name,
                               subtitle: `${detail.form_family_reference} · ${detail.department_name} / ${detail.lab_name} · version ${detail.version_number}`,
                               generatedBy: detail.assigned_trainer_name
@@ -701,7 +699,7 @@ export function TrainingRecordsPanel({
                       }}
                       type="button"
                     >
-                      Print form
+                      Download DOCX
                     </button>
                   </div>
                 </article>

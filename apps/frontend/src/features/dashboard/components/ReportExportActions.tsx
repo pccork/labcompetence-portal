@@ -1,31 +1,21 @@
 interface ReportExportActionsProps {
   disabled: boolean;
-  onDownloadCsv: () => void;
-  onPrint: () => void;
+  onDownloadDocx: () => void;
 }
 
 export function ReportExportActions({
   disabled,
-  onDownloadCsv,
-  onPrint,
+  onDownloadDocx,
 }: ReportExportActionsProps) {
   return (
-    <div className="report-action-group buttons has-addons">
+    <div className="report-action-group buttons">
       <button
         className="button is-small is-light"
         disabled={disabled}
-        onClick={onDownloadCsv}
+        onClick={onDownloadDocx}
         type="button"
       >
-        Download CSV
-      </button>
-      <button
-        className="button is-small is-light"
-        disabled={disabled}
-        onClick={onPrint}
-        type="button"
-      >
-        Print / Save PDF
+        Download DOCX
       </button>
     </div>
   );
