@@ -3,6 +3,7 @@ import { Role } from "shared-types";
 
 import {
   canAccessHospital,
+  canAccessTrainingUnit,
   getHospitalAccessScope,
 } from "../services/access-policy-service";
 import { findLabById } from "../services/lab-service";
@@ -63,7 +64,11 @@ const userLabRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const labs = await listLabsForUser(fastify.db, userId);
+      const labs = await listLabsForUser(
+        fastify.db,
+        userId,
+        scope.trainingUnitIds
+      );
 
       return { user, labs };
     }
@@ -113,7 +118,12 @@ const userLabRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (
         !canAccessHospital(scope, user.hospital_id) ||
-        !canAccessHospital(scope, lab.hospital_id, lab.is_poc)
+        !canAccessTrainingUnit(
+          scope,
+          lab.id,
+          lab.hospital_id,
+          lab.is_poc
+        )
       ) {
         return reply.status(403).send({
           message: "You cannot assign users across this hospital boundary",
@@ -184,7 +194,12 @@ const userLabRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (
         !canAccessHospital(scope, user.hospital_id) ||
-        !canAccessHospital(scope, lab.hospital_id, lab.is_poc)
+        !canAccessTrainingUnit(
+          scope,
+          lab.id,
+          lab.hospital_id,
+          lab.is_poc
+        )
       ) {
         return reply.status(403).send({
           message: "You cannot remove assignments across this hospital boundary",

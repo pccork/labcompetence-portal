@@ -58,7 +58,10 @@ export interface PocTrainingRequest {
   requested_at: Date;
 }
 
-export async function listPocRegistrationLinks(db: Pool) {
+export async function listPocRegistrationLinks(
+  db: Pool,
+  trainingUnitIds?: number[]
+) {
   const result = await db.query<PocRegistrationLink>(
     `
     SELECT
@@ -79,8 +82,13 @@ export async function listPocRegistrationLinks(db: Pool) {
     INNER JOIN training_units tu ON tu.id = prl.training_unit_id
     INNER JOIN labs l ON l.id = tu.lab_id
     INNER JOIN hospitals h ON h.id = l.hospital_id
+    WHERE (
+      $1::int[] IS NULL
+      OR prl.training_unit_id = ANY($1::int[])
+    )
     ORDER BY prl.created_at DESC
-    `
+    `,
+    [trainingUnitIds ?? null]
   );
 
   return result.rows;
@@ -313,7 +321,8 @@ export async function registerTraineeFromPocLink(
 export async function listPocTrainingRequests(
   db: Pool,
   hospitalId?: number,
-  includeCrossHospitalPoc = false
+  includeCrossHospitalPoc = false,
+  trainingUnitIds?: number[]
 ) {
   const result = await db.query<PocTrainingRequest>(
     `
@@ -353,9 +362,13 @@ export async function listPocTrainingRequests(
       OR l.hospital_id = $1
       OR ($2 = true AND l.is_poc = true)
     )
+      AND (
+        $3::int[] IS NULL
+        OR ptr.training_unit_id = ANY($3::int[])
+      )
     ORDER BY ptr.requested_at DESC
     `,
-    [hospitalId ?? null, includeCrossHospitalPoc]
+    [hospitalId ?? null, includeCrossHospitalPoc, trainingUnitIds ?? null]
   );
 
   return result.rows;

@@ -81,15 +81,20 @@ const templateSummarySelect = `
 
 export async function listTemplates(
   db: Pool,
-  hospitalId?: number
+  hospitalId?: number,
+  trainingUnitIds?: number[]
 ) {
   const result = await db.query<TrainingTemplate>(
     `
     ${templateSummarySelect}
     WHERE ($1::int IS NULL OR l.hospital_id = $1)
+      AND (
+        $2::int[] IS NULL
+        OR t.training_unit_id = ANY($2::int[])
+      )
     ORDER BY h.name ASC, l.name ASC, t.name ASC
     `,
-    [hospitalId ?? null]
+    [hospitalId ?? null, trainingUnitIds ?? null]
   );
 
   return result.rows;

@@ -6,9 +6,15 @@ export interface Hospital {
   created_at: Date;
 }
 
-export async function listHospitals(db: Pool) {
+export async function listHospitals(db: Pool, hospitalId?: number) {
   const result = await db.query<Hospital>(
-    "SELECT id, name, created_at FROM hospitals ORDER BY name ASC"
+    `
+    SELECT id, name, created_at
+    FROM hospitals
+    WHERE ($1::int IS NULL OR id = $1)
+    ORDER BY name ASC
+    `,
+    [hospitalId ?? null]
   );
 
   return result.rows;

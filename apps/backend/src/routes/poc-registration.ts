@@ -9,6 +9,7 @@ import { findHospitalById } from "../services/hospital-service";
 import { findLabById } from "../services/lab-service";
 import {
   canAccessHospital,
+  canAccessTrainingUnit,
   getHospitalAccessScope,
   resolveScopedHospitalId,
 } from "../services/access-policy-service";
@@ -85,8 +86,20 @@ const pocRegistrationRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.requireRole(Role.ADMIN),
       ],
     },
-    async () => {
-      const registrationLinks = await listPocRegistrationLinks(fastify.db);
+    async (request, reply) => {
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id)
+      );
+
+      if (!scope) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      const registrationLinks = await listPocRegistrationLinks(
+        fastify.db,
+        scope.trainingUnitIds
+      );
 
       return { registrationLinks };
     }
@@ -128,7 +141,14 @@ const pocRegistrationRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ message: "User not found" });
       }
 
-      if (!canAccessHospital(scope, lab.hospital_id, lab.is_poc)) {
+      if (
+        !canAccessTrainingUnit(
+          scope,
+          lab.id,
+          lab.hospital_id,
+          lab.is_poc
+        )
+      ) {
         return reply.status(403).send({
           message: "You cannot create POC registration links for this lab",
         });
@@ -183,6 +203,12 @@ const pocRegistrationRoutes: FastifyPluginAsync = async (fastify) => {
       if (
         !canAccessHospital(
           scope,
+          registrationLink.hospital_id,
+          registrationLink.lab_is_poc
+        ) ||
+        !canAccessTrainingUnit(
+          scope,
+          registrationLink.lab_id,
           registrationLink.hospital_id,
           registrationLink.lab_is_poc
         )
@@ -332,7 +358,8 @@ const pocRegistrationRoutes: FastifyPluginAsync = async (fastify) => {
       const requests = await listPocTrainingRequests(
         fastify.db,
         resolveScopedHospitalId(scope),
-        scope.canAccessCrossHospitalPoc
+        scope.canAccessCrossHospitalPoc,
+        scope.trainingUnitIds
       );
 
       return { requests };
@@ -394,6 +421,12 @@ const pocRegistrationRoutes: FastifyPluginAsync = async (fastify) => {
       if (
         !canAccessHospital(
           scope,
+          trainingRequest.lab_hospital_id,
+          trainingRequest.lab_is_poc
+        ) ||
+        !canAccessTrainingUnit(
+          scope,
+          trainingRequest.lab_id,
           trainingRequest.lab_hospital_id,
           trainingRequest.lab_is_poc
         )

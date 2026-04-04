@@ -181,7 +181,8 @@ async function listSpecimensForTrainingRecord(
 export async function listTrainingRecords(
   db: Pool,
   hospitalId?: number,
-  includeCrossHospitalPoc = false
+  includeCrossHospitalPoc = false,
+  trainingUnitIds?: number[]
 ) {
   const result = await db.query<TrainingRecordSummary>(
     `
@@ -191,9 +192,13 @@ export async function listTrainingRecords(
       OR template_lab.hospital_id = $1
       OR ($2 = true AND template_lab.is_poc = true)
     )
+      AND (
+        $3::int[] IS NULL
+        OR template_unit.id = ANY($3::int[])
+      )
     ORDER BY tr.expires_at ASC, tr.created_at DESC
     `,
-    [hospitalId ?? null, includeCrossHospitalPoc]
+    [hospitalId ?? null, includeCrossHospitalPoc, trainingUnitIds ?? null]
   );
 
   return result.rows;
@@ -313,7 +318,8 @@ export async function listTrainingRecordsExpiringWithinDays(
   db: Pool,
   days: number,
   hospitalId?: number,
-  includeCrossHospitalPoc = false
+  includeCrossHospitalPoc = false,
+  trainingUnitIds?: number[]
 ) {
   const result = await db.query<TrainingRecordSummary>(
     `
@@ -325,9 +331,18 @@ export async function listTrainingRecordsExpiringWithinDays(
         OR template_lab.hospital_id = $2
         OR ($3 = true AND template_lab.is_poc = true)
       )
+      AND (
+        $4::int[] IS NULL
+        OR template_unit.id = ANY($4::int[])
+      )
     ORDER BY tr.expires_at ASC
     `,
-    [days, hospitalId ?? null, includeCrossHospitalPoc]
+    [
+      days,
+      hospitalId ?? null,
+      includeCrossHospitalPoc,
+      trainingUnitIds ?? null,
+    ]
   );
 
   return result.rows;

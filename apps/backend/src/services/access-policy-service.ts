@@ -1,5 +1,4 @@
 import { Pool } from "pg";
-import { Role } from "shared-types";
 
 import { findUserById } from "./user-service";
 
@@ -7,6 +6,7 @@ export interface HospitalAccessScope {
   homeHospitalId: number;
   canAccessAllHospitals: boolean;
   canAccessCrossHospitalPoc: boolean;
+  trainingUnitIds: number[];
 }
 
 export async function getHospitalAccessScope(
@@ -33,11 +33,24 @@ export async function getHospitalAccessScope(
     [requesterId]
   );
 
+  const trainingUnitResult = await db.query<{ training_unit_id: number }>(
+    `
+    SELECT utu.training_unit_id
+    FROM user_training_units utu
+    WHERE utu.user_id = $1
+    ORDER BY utu.training_unit_id ASC
+    `,
+    [requesterId]
+  );
+
   return {
     homeHospitalId: requester.hospital_id,
-    canAccessAllHospitals: requester.role === Role.ADMIN,
+    canAccessAllHospitals: false,
     canAccessCrossHospitalPoc:
       pocAccessResult.rows[0]?.has_poc_access ?? false,
+    trainingUnitIds: trainingUnitResult.rows.map(
+      (row) => row.training_unit_id
+    ),
   };
 }
 
@@ -55,4 +68,16 @@ export function canAccessHospital(
 
 export function resolveScopedHospitalId(scope: HospitalAccessScope) {
   return scope.canAccessAllHospitals ? undefined : scope.homeHospitalId;
+}
+
+export function canAccessTrainingUnit(
+  scope: HospitalAccessScope,
+  trainingUnitId: number,
+  hospitalId: number,
+  targetIsPoc = false
+) {
+  return (
+    scope.trainingUnitIds.includes(trainingUnitId) &&
+    canAccessHospital(scope, hospitalId, targetIsPoc)
+  );
 }

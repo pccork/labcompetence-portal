@@ -3,6 +3,7 @@ import { Role } from "shared-types";
 
 import {
   canAccessHospital,
+  canAccessTrainingUnit,
   getHospitalAccessScope,
   resolveScopedHospitalId,
 } from "../services/access-policy-service";
@@ -67,7 +68,8 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
       const assignments = await listTrainingAssignments(
         fastify.db,
         resolveScopedHospitalId(scope),
-        scope.canAccessCrossHospitalPoc
+        scope.canAccessCrossHospitalPoc,
+        scope.trainingUnitIds
       );
 
       return { assignments };
@@ -104,7 +106,8 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.db,
         days,
         resolveScopedHospitalId(scope),
-        scope.canAccessCrossHospitalPoc
+        scope.canAccessCrossHospitalPoc,
+        scope.trainingUnitIds
       );
 
       return { assignments };
@@ -185,8 +188,9 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (
         !canAccessHospital(scope, trainee.hospital_id) ||
-        !canAccessHospital(
+        !canAccessTrainingUnit(
           scope,
+          templateScope.lab_id,
           templateScope.hospital_id,
           templateScope.is_poc
         )
@@ -284,8 +288,9 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (
         !canAccessHospital(scope, existingAssignment.trainee_hospital_id) ||
-        !canAccessHospital(
+        !canAccessTrainingUnit(
           scope,
+          existingAssignment.lab_id,
           existingAssignment.lab_hospital_id,
           existingAssignment.lab_is_poc
         )

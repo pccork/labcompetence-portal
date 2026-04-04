@@ -6,6 +6,7 @@ import {
 
 import {
   canAccessHospital,
+  canAccessTrainingUnit,
   getHospitalAccessScope,
   resolveScopedHospitalId,
 } from "../services/access-policy-service";
@@ -95,7 +96,8 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
 
       const templates = await listTemplates(
         fastify.db,
-        resolveScopedHospitalId(scope)
+        resolveScopedHospitalId(scope),
+        scope.trainingUnitIds
       );
 
       return { templates };
@@ -178,7 +180,14 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ message: "User not found" });
       }
 
-      if (!canAccessHospital(scope, lab.hospital_id, lab.is_poc)) {
+      if (
+        !canAccessTrainingUnit(
+          scope,
+          lab.id,
+          lab.hospital_id,
+          lab.is_poc
+        )
+      ) {
         return reply.status(403).send({
           message: "You cannot create templates for this lab",
         });
@@ -237,6 +246,12 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
       if (
         !canAccessHospital(
           scope,
+          template.lab_hospital_id,
+          template.lab_is_poc
+        ) ||
+        !canAccessTrainingUnit(
+          scope,
+          template.lab_id,
           template.lab_hospital_id,
           template.lab_is_poc
         )
@@ -324,7 +339,18 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
           existingTemplateScope.hospital_id,
           existingTemplateScope.is_poc
         ) ||
-        !canAccessHospital(scope, lab.hospital_id, lab.is_poc)
+        !canAccessTrainingUnit(
+          scope,
+          existingTemplateScope.lab_id,
+          existingTemplateScope.hospital_id,
+          existingTemplateScope.is_poc
+        ) ||
+        !canAccessTrainingUnit(
+          scope,
+          lab.id,
+          lab.hospital_id,
+          lab.is_poc
+        )
       ) {
         return reply.status(403).send({
           message: "You cannot update this template across this hospital boundary",
@@ -394,6 +420,12 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
       if (
         !canAccessHospital(
           scope,
+          templateScope.hospital_id,
+          templateScope.is_poc
+        ) ||
+        !canAccessTrainingUnit(
+          scope,
+          templateScope.lab_id,
           templateScope.hospital_id,
           templateScope.is_poc
         )

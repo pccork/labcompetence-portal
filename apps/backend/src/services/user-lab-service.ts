@@ -2,7 +2,11 @@ import { Pool } from "pg";
 
 import { Lab } from "./lab-service";
 
-export async function listLabsForUser(db: Pool, userId: number) {
+export async function listLabsForUser(
+  db: Pool,
+  userId: number,
+  trainingUnitIds?: number[]
+) {
   const result = await db.query<Lab>(
     `
     SELECT
@@ -20,9 +24,13 @@ export async function listLabsForUser(db: Pool, userId: number) {
     INNER JOIN user_training_units utu
       ON utu.training_unit_id = tu.id
     WHERE utu.user_id = $1
+      AND (
+        $2::int[] IS NULL
+        OR utu.training_unit_id = ANY($2::int[])
+      )
     ORDER BY h.name ASC, l.name ASC, tu.name ASC
     `,
-    [userId]
+    [userId, trainingUnitIds ?? null]
   );
 
   return result.rows;

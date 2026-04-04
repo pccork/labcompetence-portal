@@ -11,7 +11,11 @@ export interface Lab {
   created_at: Date;
 }
 
-export async function listLabs(db: Pool, hospitalId?: number) {
+export async function listLabs(
+  db: Pool,
+  hospitalId?: number,
+  trainingUnitIds?: number[]
+) {
   const result = await db.query<Lab>(
     `
     SELECT
@@ -27,9 +31,13 @@ export async function listLabs(db: Pool, hospitalId?: number) {
     INNER JOIN labs l ON l.id = tu.lab_id
     INNER JOIN hospitals h ON h.id = l.hospital_id
     WHERE ($1::int IS NULL OR l.hospital_id = $1)
+      AND (
+        $2::int[] IS NULL
+        OR tu.id = ANY($2::int[])
+      )
     ORDER BY h.name ASC, l.name ASC, tu.name ASC
     `,
-    [hospitalId ?? null]
+    [hospitalId ?? null, trainingUnitIds ?? null]
   );
 
   return result.rows;

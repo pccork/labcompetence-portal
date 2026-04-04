@@ -6,6 +6,7 @@ import {
 
 import {
   canAccessHospital,
+  canAccessTrainingUnit,
   getHospitalAccessScope,
   resolveScopedHospitalId,
 } from "../services/access-policy-service";
@@ -77,7 +78,8 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
       const records = await listTrainingRecords(
         fastify.db,
         resolveScopedHospitalId(scope),
-        scope.canAccessCrossHospitalPoc
+        scope.canAccessCrossHospitalPoc,
+        scope.trainingUnitIds
       );
 
       return { records };
@@ -117,6 +119,12 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
       if (
         !canAccessHospital(
           scope,
+          record.lab_hospital_id,
+          record.lab_is_poc
+        ) ||
+        !canAccessTrainingUnit(
+          scope,
+          record.lab_id,
           record.lab_hospital_id,
           record.lab_is_poc
         )
@@ -304,8 +312,9 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (
         !canAccessHospital(scope, trainee.hospital_id) ||
-        !canAccessHospital(
+        !canAccessTrainingUnit(
           scope,
+          templateVersionScope.lab_id,
           templateVersionScope.hospital_id,
           templateVersionScope.is_poc
         )
@@ -401,7 +410,8 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.db,
         days,
         resolveScopedHospitalId(scope),
-        scope.canAccessCrossHospitalPoc
+        scope.canAccessCrossHospitalPoc,
+        scope.trainingUnitIds
       );
 
       return { records };

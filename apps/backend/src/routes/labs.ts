@@ -3,6 +3,7 @@ import { Role } from "shared-types";
 
 import {
   canAccessHospital,
+  canAccessTrainingUnit,
   getHospitalAccessScope,
   resolveScopedHospitalId,
 } from "../services/access-policy-service";
@@ -52,7 +53,8 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
 
       const labs = await listLabs(
         fastify.db,
-        resolveScopedHospitalId(scope)
+        resolveScopedHospitalId(scope),
+        scope.trainingUnitIds
       );
 
       return { labs };
@@ -212,7 +214,12 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       if (
-        !canAccessHospital(scope, existingLab.hospital_id) ||
+        !canAccessTrainingUnit(
+          scope,
+          existingLab.id,
+          existingLab.hospital_id,
+          existingLab.is_poc
+        ) ||
         !canAccessHospital(scope, hospitalId)
       ) {
         return reply.status(403).send({
@@ -283,7 +290,14 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
             .send({ message: "Training unit not found" });
         }
 
-        if (!canAccessHospital(scope, existingLab.hospital_id)) {
+        if (
+          !canAccessTrainingUnit(
+            scope,
+            existingLab.id,
+            existingLab.hospital_id,
+            existingLab.is_poc
+          )
+        ) {
           return reply.status(403).send({
             message: "You cannot delete labs from this hospital",
           });

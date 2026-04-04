@@ -104,7 +104,8 @@ export async function findTemplateAssignmentScopeByTemplateId(
 export async function listTrainingAssignments(
   db: Pool,
   hospitalId?: number,
-  includeCrossHospitalPoc = false
+  includeCrossHospitalPoc = false,
+  trainingUnitIds?: number[]
 ) {
   const result = await db.query<TrainingAssignment>(
     `
@@ -115,9 +116,13 @@ export async function listTrainingAssignments(
         OR l.hospital_id = $1
         OR ($2 = true AND l.is_poc = true)
       )
+      AND (
+        $3::int[] IS NULL
+        OR ta.training_unit_id = ANY($3::int[])
+      )
     ORDER BY ta.next_due_at ASC, trainee.name ASC, t.name ASC
     `,
-    [hospitalId ?? null, includeCrossHospitalPoc]
+    [hospitalId ?? null, includeCrossHospitalPoc, trainingUnitIds ?? null]
   );
 
   return result.rows;
@@ -127,7 +132,8 @@ export async function listTrainingAssignmentsDueWithinDays(
   db: Pool,
   days: number,
   hospitalId?: number,
-  includeCrossHospitalPoc = false
+  includeCrossHospitalPoc = false,
+  trainingUnitIds?: number[]
 ) {
   const result = await db.query<TrainingAssignment>(
     `
@@ -140,9 +146,18 @@ export async function listTrainingAssignmentsDueWithinDays(
         OR l.hospital_id = $2
         OR ($3 = true AND l.is_poc = true)
       )
+      AND (
+        $4::int[] IS NULL
+        OR ta.training_unit_id = ANY($4::int[])
+      )
     ORDER BY ta.next_due_at ASC, trainee.name ASC, t.name ASC
     `,
-    [days, hospitalId ?? null, includeCrossHospitalPoc]
+    [
+      days,
+      hospitalId ?? null,
+      includeCrossHospitalPoc,
+      trainingUnitIds ?? null,
+    ]
   );
 
   return result.rows;
