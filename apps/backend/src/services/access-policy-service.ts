@@ -23,9 +23,10 @@ export async function getHospitalAccessScope(
     `
     SELECT EXISTS (
       SELECT 1
-      FROM user_labs ul
-      INNER JOIN labs l ON l.id = ul.lab_id
-      WHERE ul.user_id = $1
+      FROM user_training_units utu
+      INNER JOIN training_units tu ON tu.id = utu.training_unit_id
+      INNER JOIN labs l ON l.id = tu.lab_id
+      WHERE utu.user_id = $1
         AND l.is_poc = true
     ) AS has_poc_access
     `,

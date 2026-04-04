@@ -17,6 +17,8 @@ import {
 
 interface CreateLabBody {
   Body: {
+    departmentId?: number | null;
+    departmentName?: string;
     hospitalId?: number;
     name?: string;
     isPoc?: boolean;
@@ -67,6 +69,12 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const hospitalId = Number(request.body?.hospitalId);
+      const departmentId =
+        request.body?.departmentId === null ||
+        request.body?.departmentId === undefined
+          ? null
+          : Number(request.body.departmentId);
+      const departmentName = request.body?.departmentName?.trim() || null;
       const name = request.body?.name?.trim();
       const isPoc = request.body?.isPoc ?? false;
 
@@ -77,7 +85,18 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       if (!name) {
-        return reply.status(400).send({ message: "Lab name is required" });
+        return reply
+          .status(400)
+          .send({ message: "Training unit name is required" });
+      }
+
+      if (
+        departmentId !== null &&
+        (!Number.isInteger(departmentId) || departmentId <= 0)
+      ) {
+        return reply
+          .status(400)
+          .send({ message: "Valid departmentId is required" });
       }
 
       const hospital = await findHospitalById(fastify.db, hospitalId);
@@ -106,7 +125,9 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
           fastify.db,
           hospitalId,
           name,
-          isPoc
+          isPoc,
+          departmentId,
+          departmentName
         );
 
         return reply.status(201).send({ lab });
@@ -114,7 +135,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
         if (error.code === "23505") {
           return reply
             .status(409)
-            .send({ message: "Lab already exists" });
+            .send({ message: "Training unit already exists" });
         }
 
         throw error;
@@ -133,6 +154,12 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const labId = Number(request.params.id);
       const hospitalId = Number(request.body?.hospitalId);
+      const departmentId =
+        request.body?.departmentId === null ||
+        request.body?.departmentId === undefined
+          ? null
+          : Number(request.body.departmentId);
+      const departmentName = request.body?.departmentName?.trim() || null;
       const name = request.body?.name?.trim();
       const isPoc = request.body?.isPoc ?? false;
 
@@ -147,7 +174,18 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       if (!name) {
-        return reply.status(400).send({ message: "Lab name is required" });
+        return reply
+          .status(400)
+          .send({ message: "Training unit name is required" });
+      }
+
+      if (
+        departmentId !== null &&
+        (!Number.isInteger(departmentId) || departmentId <= 0)
+      ) {
+        return reply
+          .status(400)
+          .send({ message: "Valid departmentId is required" });
       }
 
       const hospital = await findHospitalById(fastify.db, hospitalId);
@@ -168,7 +206,9 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
       const existingLab = await findLabById(fastify.db, labId);
 
       if (!existingLab) {
-        return reply.status(404).send({ message: "Lab not found" });
+        return reply
+          .status(404)
+          .send({ message: "Training unit not found" });
       }
 
       if (
@@ -186,11 +226,15 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
           labId,
           hospitalId,
           name,
-          isPoc
+          isPoc,
+          departmentId,
+          departmentName
         );
 
         if (!lab) {
-          return reply.status(404).send({ message: "Lab not found" });
+          return reply
+            .status(404)
+            .send({ message: "Training unit not found" });
         }
 
         return { lab };
@@ -198,7 +242,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
         if (error.code === "23505") {
           return reply
             .status(409)
-            .send({ message: "Lab already exists" });
+            .send({ message: "Training unit already exists" });
         }
 
         throw error;
@@ -234,7 +278,9 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
         const existingLab = await findLabById(fastify.db, labId);
 
         if (!existingLab) {
-          return reply.status(404).send({ message: "Lab not found" });
+          return reply
+            .status(404)
+            .send({ message: "Training unit not found" });
         }
 
         if (!canAccessHospital(scope, existingLab.hospital_id)) {
@@ -246,7 +292,9 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
         const lab = await deleteLab(fastify.db, labId);
 
         if (!lab) {
-          return reply.status(404).send({ message: "Lab not found" });
+          return reply
+            .status(404)
+            .send({ message: "Training unit not found" });
         }
 
         return { lab };

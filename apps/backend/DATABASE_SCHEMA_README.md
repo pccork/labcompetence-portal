@@ -9,15 +9,16 @@ The backend uses one shared multi-hospital schema.
 The core design decisions are:
 
 - a user belongs to one home hospital
-- a lab belongs to one hospital
-- a user can be linked to many labs through `user_labs`
-- a template belongs to a lab and is reusable
+- a parent department/service belongs to one hospital through `labs`
+- each section/instrument/device pathway is a child `training_unit` under one parent department/service
+- a user can be linked to many child training units through `user_training_units`
+- a template belongs to a child training unit and is reusable
 - templates can target a specific staff category while permission roles remain separate
 - recurring training requirements are tracked in `training_assignments`
 - a trainee's identity is stored on `users`, not inside the base template
 - a training record is the trainee-specific record derived from a template version
 - specimen evidence and structured assessment answers are stored on training records, not on the reusable template
-- POC labs are marked with `labs.is_poc = true`
+- POC parent departments are marked with `labs.is_poc = true`
 - POC QR self-registration creates a `poc_training_requests` row first, not an immediate final lab assignment
 - trainer replies can schedule the training and then activate the user-to-POC-lab assignment
 
@@ -36,7 +37,7 @@ Columns:
 Relationship:
 
 - one hospital has many `users`
-- one hospital has many `labs`
+- one hospital has many parent departments/services in `labs`
 
 ## `users`
 
@@ -71,14 +72,14 @@ Important behavior:
 Relationships:
 
 - `users.hospital_id -> hospitals.id`
-- one user can belong to many labs through `user_labs`
+- one user can belong to many child training units through `user_training_units`
 - one user can own templates through `templates.created_by`
 - one trainee can have many `training_records`
 - one trainer can respond to many `poc_training_requests`
 
 ## `labs`
 
-Stores ordinary lab departments and POC departments.
+Stores parent laboratory departments/services.
 
 Columns:
 
@@ -95,31 +96,58 @@ Constraint:
 Relationships:
 
 - `labs.hospital_id -> hospitals.id`
-- one lab can have many assigned users through `user_labs`
-- one lab can own many `templates`
-- one POC lab can have many `poc_registration_links`
-- one POC lab can receive many `poc_training_requests`
+- one parent department/service can have many child `training_units`
 
 POC difference:
 
-- ordinary labs use normal admin-created users and direct user-lab assignment
-- POC labs can expose QR registration links and accept cross-hospital trainee requests
+- ordinary parent departments use normal admin-created users and child-unit assignment
+- POC parent departments can have QR-enabled child device units and accept cross-hospital trainee requests
 
-## `user_labs`
+## `training_units`
 
-Join table for the many-to-many relationship between users and labs.
+Stores child sections, instrument areas, or POCT device pathways under a parent lab/department.
+
+Examples:
+
+- `Biochemistry -> Mass Spectrometry`
+- `Biochemistry -> AU5800`
+- `Point of Care -> Blood Gas`
+- `Point of Care -> Glucose Meter`
+
+Columns:
+
+- `id`: primary key
+- `lab_id`: parent department/service reference
+- `name`: child section/device/training-unit name
+- `created_at`: row creation timestamp
+
+Constraint:
+
+- `(lab_id, name)` is unique, so one department cannot contain duplicate child unit names
+
+Relationships:
+
+- `training_units.lab_id -> labs.id`
+- one training unit can have many assigned users through `user_training_units`
+- one training unit can own many `templates`
+- one POC training unit can have many `poc_registration_links`
+- one POC training unit can receive many `poc_training_requests`
+
+## `user_training_units`
+
+Join table for the many-to-many relationship between users and child training units.
 
 Columns:
 
 - `user_id`: user reference
-- `lab_id`: lab reference
+- `training_unit_id`: child section/device reference
 - `assigned_at`: assignment timestamp
 
 Constraints and relationships:
 
-- primary key is `(user_id, lab_id)`, so the same user cannot be assigned to the same lab twice
+- primary key is `(user_id, training_unit_id)`, so the same user cannot be assigned to the same training unit twice
 - `user_id -> users.id`
-- `lab_id -> labs.id`
+- `training_unit_id -> training_units.id`
 
 POC difference:
 
@@ -128,13 +156,14 @@ POC difference:
 
 ## `templates`
 
-Stores reusable accreditation/training template definitions at lab level.
+Stores reusable accreditation/training template definitions at child training-unit level.
 
 Columns:
 
 - `id`: primary key
 - `name`: template name
-- `lab_id`: owning lab
+- `lab_id`: legacy parent department reference kept in sync from `training_unit_id`
+- `training_unit_id`: owning child section/device/training unit
 - `created_by`: user who created the template
 - `form_family_reference`: document family/reference, for example `FOR-CUH-PAT-2`
 - `template_kind`: broad form shape, for example `training_event_competency`, `competency_only`, `senior_staff_programme`, or `poc_checklist`
@@ -145,6 +174,7 @@ Columns:
 Relationships:
 
 - `templates.lab_id -> labs.id`
+- `templates.training_unit_id -> training_units.id`
 - `templates.created_by -> users.id`
 - one template can have many `template_versions`
 
@@ -260,7 +290,13 @@ Relationships:
 - `training_assignments.user_id -> users.id`
 - `training_assignments.template_id -> templates.id`
 - `training_assignments.lab_id -> labs.id`
+- `training_assignments.training_unit_id -> training_units.id`
 - `training_assignments.assigned_by -> users.id`
+
+Implementation note:
+
+- `training_assignments.lab_id` is retained as the parent department reference for compatibility/reporting
+- `training_assignments.training_unit_id` is the main child section/device reference that dashboards should group by
 
 ## `training_records`
 
@@ -352,12 +388,13 @@ Relationships:
 
 ## `poc_registration_links`
 
-Stores QR-link registration codes for POC labs.
+Stores QR-link registration codes for child POCT device training units.
 
 Columns:
 
 - `id`: primary key
-- `lab_id`: POC lab that owns this QR code/link
+- `lab_id`: legacy parent POC department reference kept in sync from `training_unit_id`
+- `training_unit_id`: child POC device unit that owns this QR code/link
 - `code`: unique public registration code used in the QR URL
 - `is_active`: allows old QR links to be disabled
 - `default_training_location`: optional default face-to-face training location
@@ -367,11 +404,12 @@ Columns:
 Relationships:
 
 - `poc_registration_links.lab_id -> labs.id`
+- `poc_registration_links.training_unit_id -> training_units.id`
 - one QR link can receive many `poc_training_requests`
 
 POC difference:
 
-- this table should only be used for POC labs
+- this table should only be used for POC child training units under a POC parent department
 - public self-registration uses this code as the controlled entry point
 - the QR link can carry default scheduling text so the trainer does not have to retype location/time every time
 - the public QR registration body can also capture whether the user is `poct_scientist` or `poct_medical_nursing`
@@ -385,7 +423,8 @@ Columns:
 - `id`: primary key
 - `registration_link_id`: QR link that created this request
 - `user_id`: self-registered trainee user
-- `lab_id`: target POC lab
+- `lab_id`: legacy parent POC department reference kept in sync from `training_unit_id`
+- `training_unit_id`: target child POC device training unit
 - `is_training_approved`: currently defaults to `true`, meaning the trainee is approved to undertake training without an extra approval step
 - `trainer_reply_status`: `pending_trainer_reply`, `scheduled`, or `cancelled`
 - `training_location`: location sent by trainer, optionally copied from the QR link default
@@ -404,16 +443,17 @@ Relationships:
 - `poc_training_requests.registration_link_id -> poc_registration_links.id`
 - `poc_training_requests.user_id -> users.id`
 - `poc_training_requests.lab_id -> labs.id`
+- `poc_training_requests.training_unit_id -> training_units.id`
 - `poc_training_requests.responded_by -> users.id`
 
 POC workflow:
 
 - trainee scans QR code and submits self-registration
 - backend creates a `users` row and a `poc_training_requests` row
-- backend does not immediately create `user_labs`
+- backend does not immediately create `user_training_units`
 - request starts as `is_training_approved = true` and `trainer_reply_status = 'pending_trainer_reply'`
 - trainer reviews incoming requests and sends time/place details
-- if trainer sets reply status to `scheduled`, backend creates the `user_labs` assignment
+- if trainer sets reply status to `scheduled`, backend creates the `user_training_units` assignment
 - this means "approved for training" is separate from "passed/signed off training"
 
 ## Authorization Model
@@ -438,7 +478,8 @@ Ordinary lab training:
 
 - users are usually created and assigned by admin staff
 - training is mainly hospital-local
-- lab assignment can happen directly through `/users/:userId/labs/:labId`
+- child section/device assignment can happen directly through `/users/:userId/labs/:labId`
+- in the current API route name, `labId` now refers to a child `training_units.id`
 
 POC training:
 
@@ -469,10 +510,10 @@ Ordinary Biochemistry / non-POC labs:
 
 POC labs:
 
-- trainer/admin creates a QR registration link for a POC lab/device
+- trainer/admin creates a QR registration link for a child POCT device unit
 - a POCT scientist or medical/nursing/midwifery trainee self-registers through the public QR link
 - trainer sends time/place details and schedules the request
-- on `scheduled`, final POC lab membership is created
+- on `scheduled`, final POC training-unit membership is created
 - the correct POC template can then be assigned through `training_assignments`
 
 Why this model fits the paper-to-digital transition:

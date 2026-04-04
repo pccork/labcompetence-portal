@@ -24,6 +24,8 @@ export interface TrainingRecordSummary {
   trainee_email: string;
   trainee_staff_type: StaffType;
   lab_id: number;
+  department_id: number;
+  department_name: string;
   lab_hospital_id: number;
   lab_hospital_name: string;
   lab_name: string;
@@ -76,6 +78,7 @@ export interface TemplateVersionHospitalScope {
   id: number;
   template_id: number;
   lab_id: number;
+  department_id: number;
   hospital_id: number;
   is_poc: boolean;
 }
@@ -89,12 +92,14 @@ export async function findTemplateVersionHospitalScopeById(
     SELECT
       tv.id,
       tv.template_id,
-      l.id AS lab_id,
+      tu.id AS lab_id,
+      l.id AS department_id,
       l.hospital_id,
       l.is_poc
     FROM template_versions tv
     INNER JOIN templates t ON t.id = tv.template_id
-    INNER JOIN labs l ON l.id = t.lab_id
+    INNER JOIN training_units tu ON tu.id = t.training_unit_id
+    INNER JOIN labs l ON l.id = tu.lab_id
     WHERE tv.id = $1
     `,
     [templateVersionId]
@@ -112,10 +117,12 @@ const trainingRecordSummarySelect = `
     u.name AS trainee_name,
     u.email AS trainee_email,
     u.staff_type AS trainee_staff_type,
-    template_lab.id AS lab_id,
+    template_unit.id AS lab_id,
+    template_lab.id AS department_id,
+    template_lab.name AS department_name,
     template_lab.hospital_id AS lab_hospital_id,
     lab_hospital.name AS lab_hospital_name,
-    template_lab.name AS lab_name,
+    template_unit.name AS lab_name,
     template_lab.is_poc AS lab_is_poc,
     tr.template_version_id,
     tv.template_id,
@@ -140,7 +147,8 @@ const trainingRecordSummarySelect = `
   INNER JOIN hospitals trainee_hospital ON trainee_hospital.id = u.hospital_id
   INNER JOIN template_versions tv ON tv.id = tr.template_version_id
   INNER JOIN templates t ON t.id = tv.template_id
-  INNER JOIN labs template_lab ON template_lab.id = t.lab_id
+  INNER JOIN training_units template_unit ON template_unit.id = t.training_unit_id
+  INNER JOIN labs template_lab ON template_lab.id = template_unit.lab_id
   INNER JOIN hospitals lab_hospital ON lab_hospital.id = template_lab.hospital_id
   LEFT JOIN users trainer ON trainer.id = tr.assigned_trainer_id
 `;

@@ -17,6 +17,8 @@ export interface TrainingTemplate {
   name: string;
   lab_id: number;
   lab_name: string;
+  department_id: number;
+  department_name: string;
   lab_hospital_id: number;
   lab_hospital_name: string;
   lab_is_poc: boolean;
@@ -38,6 +40,7 @@ export interface TrainingTemplateDetail extends TrainingTemplate {
 export interface TemplateHospitalScope {
   id: number;
   lab_id: number;
+  department_id: number;
   hospital_id: number;
   is_poc: boolean;
 }
@@ -46,8 +49,10 @@ const templateSummarySelect = `
   SELECT
     t.id,
     t.name,
-    t.lab_id,
-    l.name AS lab_name,
+    t.training_unit_id AS lab_id,
+    tu.name AS lab_name,
+    l.id AS department_id,
+    l.name AS department_name,
     l.hospital_id AS lab_hospital_id,
     h.name AS lab_hospital_name,
     l.is_poc AS lab_is_poc,
@@ -61,7 +66,8 @@ const templateSummarySelect = `
     latest_version.id AS latest_version_id,
     latest_version.version_number AS latest_version_number
   FROM templates t
-  INNER JOIN labs l ON l.id = t.lab_id
+  INNER JOIN training_units tu ON tu.id = t.training_unit_id
+  INNER JOIN labs l ON l.id = tu.lab_id
   INNER JOIN hospitals h ON h.id = l.hospital_id
   LEFT JOIN users creator ON creator.id = t.created_by
   LEFT JOIN LATERAL (
@@ -97,11 +103,13 @@ export async function findTemplateHospitalScopeById(
     `
     SELECT
       t.id,
-      t.lab_id,
+      t.training_unit_id AS lab_id,
+      l.id AS department_id,
       l.hospital_id,
       l.is_poc
     FROM templates t
-    INNER JOIN labs l ON l.id = t.lab_id
+    INNER JOIN training_units tu ON tu.id = t.training_unit_id
+    INNER JOIN labs l ON l.id = tu.lab_id
     WHERE t.id = $1
     `,
     [templateId]
@@ -181,13 +189,23 @@ export async function createTemplateWithInitialVersion(
       INSERT INTO templates (
         name,
         lab_id,
+        training_unit_id,
         created_by,
         form_family_reference,
         template_kind,
         target_staff_type,
         is_active
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      VALUES (
+        $1,
+        (SELECT lab_id FROM training_units WHERE id = $2),
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7
+      )
       RETURNING id
       `,
       [
@@ -253,7 +271,8 @@ export async function updateTemplate(
     UPDATE templates
     SET
       name = $2,
-      lab_id = $3,
+      lab_id = (SELECT lab_id FROM training_units WHERE id = $3),
+      training_unit_id = $3,
       form_family_reference = $4,
       template_kind = $5,
       target_staff_type = $6,

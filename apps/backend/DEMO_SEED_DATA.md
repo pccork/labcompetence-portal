@@ -18,9 +18,9 @@ All demo users use the password `password123`.
 | Sean O'Brien | sean.obrien@test.com | password123 | trainer | senior_medical_scientist | Dummy Mass Spectrometry section trainer |
 | Ciara Murphy | ciara.murphy@test.com | password123 | staff | basic_grade_scientist | Dummy medical scientist trainee |
 
-## Demo section
+## Demo section / training unit
 
-The seed script creates a non-POC lab section called **Mass Spectrometry** in CUH and links Jack Kenny, Sean O'Brien, and Ciara Murphy to that section.
+The seed script creates a parent department **Biochemistry**, a child training unit **Mass Spectrometry**, and links Jack Kenny, Sean O'Brien, and Ciara Murphy to that child training unit.
 
 ## Demo templates linked to Mass Spectrometry
 

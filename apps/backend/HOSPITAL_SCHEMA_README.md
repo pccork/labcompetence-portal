@@ -42,7 +42,7 @@ Key fields:
 
 ### `labs`
 
-Stores laboratory departments.
+Stores parent laboratory departments/services.
 
 Each lab belongs to one hospital through `hospital_id`.
 
@@ -61,6 +61,25 @@ Key fields:
 
 `is_poc = true` marks a Point of Care lab/department. This is important because POC may need a controlled cross-hospital permission exception.
 
+### `training_units`
+
+Stores child sections/devices under a parent lab.
+
+Examples:
+
+- Biochemistry -> Mass Spectrometry
+- Biochemistry -> AU5800
+- Point of Care -> Blood Gas
+- Point of Care -> Glucose Meter
+
+Key fields:
+
+- `id`
+- `lab_id`
+- `name`
+
+This is the cleaner level where section/device templates, training assignments, and POC QR training requests should attach.
+
 ### `users`
 
 Stores staff and trainees.
@@ -78,32 +97,32 @@ Key fields:
 
 `email` is stored on the user so reminder workflows can contact trainees whose training is due to expire.
 
-### `user_labs`
+### `user_training_units`
 
-Connects users to labs.
+Connects users to child training units.
 
 This is a many-to-many table because:
 
-- one person may belong to more than one lab
-- one lab has many people
+- one person may belong to more than one section/device pathway
+- one training unit has many people
 
 Key fields:
 
 - `user_id`
-- `lab_id`
+- `training_unit_id`
 - `assigned_at`
 
 ### `templates`
 
 Stores reusable training/accreditation template definitions.
 
-Each template belongs to a lab via `lab_id`, but it does **not** store a trainee name.
+Each template belongs to a child training unit via `training_unit_id`, but it does **not** store a trainee name.
 
 Key fields:
 
 - `id`
 - `name`
-- `lab_id`
+- `training_unit_id`
 - `created_by`
 - `is_active`
 
@@ -146,7 +165,7 @@ This supports reminder workflows without storing trainee data on the reusable ba
 
 The intended rule is:
 
-- normal lab admins/trainers manage users and records within their own hospital/labs
+- normal lab admins/trainers manage users and records within their own hospital departments/training units
 - POC can be granted a special cross-hospital exception for POC training only
 
 That is why `labs.is_poc` exists.

@@ -83,7 +83,7 @@ async function upsertUser(input: {
   return userId;
 }
 
-async function upsertLab(input: {
+async function upsertDepartment(input: {
   hospitalId: number;
   name: string;
   isPoc: boolean;
@@ -103,21 +103,45 @@ async function upsertLab(input: {
     ]
   );
 
-  const labId = result.rows[0]?.id;
+  const departmentId = result.rows[0]?.id;
 
-  if (!labId) {
-    throw new Error(`Failed to seed lab ${input.name}`);
+  if (!departmentId) {
+    throw new Error(`Failed to seed department ${input.name}`);
   }
 
-  return labId;
+  return departmentId;
+}
+
+async function upsertTrainingUnit(input: {
+  departmentId: number;
+  name: string;
+}) {
+  const result = await pool.query<{ id: number }>(
+    `
+    INSERT INTO training_units (lab_id, name)
+    VALUES ($1, $2)
+    ON CONFLICT (lab_id, name) DO UPDATE
+    SET name = EXCLUDED.name
+    RETURNING id
+    `,
+    [input.departmentId, input.name]
+  );
+
+  const trainingUnitId = result.rows[0]?.id;
+
+  if (!trainingUnitId) {
+    throw new Error(`Failed to seed training unit ${input.name}`);
+  }
+
+  return trainingUnitId;
 }
 
 async function assignUserToLab(userId: number, labId: number) {
   await pool.query(
     `
-    INSERT INTO user_labs (user_id, lab_id)
+    INSERT INTO user_training_units (user_id, training_unit_id)
     VALUES ($1, $2)
-    ON CONFLICT (user_id, lab_id) DO NOTHING
+    ON CONFLICT (user_id, training_unit_id) DO NOTHING
     `,
     [userId, labId]
   );
@@ -136,7 +160,7 @@ async function upsertTemplateWithVersion(input: {
     `
     SELECT id
     FROM templates
-    WHERE lab_id = $1
+    WHERE training_unit_id = $1
       AND name = $2
       AND target_staff_type = $3
     ORDER BY id ASC
@@ -158,13 +182,23 @@ async function upsertTemplateWithVersion(input: {
           INSERT INTO templates (
             name,
             lab_id,
+            training_unit_id,
             created_by,
             form_family_reference,
             template_kind,
             target_staff_type,
             is_active
           )
-          VALUES ($1, $2, $3, $4, $5, $6, true)
+          VALUES (
+            $1,
+            (SELECT lab_id FROM training_units WHERE id = $2),
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            true
+          )
           RETURNING id
           `,
           [
@@ -187,7 +221,8 @@ async function upsertTemplateWithVersion(input: {
     UPDATE templates
     SET
       name = $2,
-      lab_id = $3,
+      lab_id = (SELECT lab_id FROM training_units WHERE id = $3),
+      training_unit_id = $3,
       created_by = $4,
       form_family_reference = $5,
       template_kind = $6,
@@ -247,15 +282,26 @@ async function upsertTrainingAssignment(input: {
       user_id,
       template_id,
       lab_id,
+      training_unit_id,
       assigned_by,
       renewal_interval_months,
       next_due_at,
       is_active
     )
-    VALUES ($1, $2, $3, $4, $5, $6, true)
+    VALUES (
+      $1,
+      $2,
+      (SELECT lab_id FROM training_units WHERE id = $3),
+      $3,
+      $4,
+      $5,
+      $6,
+      true
+    )
     ON CONFLICT (user_id, template_id) DO UPDATE
     SET
       lab_id = EXCLUDED.lab_id,
+      training_unit_id = EXCLUDED.training_unit_id,
       assigned_by = EXCLUDED.assigned_by,
       renewal_interval_months = EXCLUDED.renewal_interval_months,
       next_due_at = EXCLUDED.next_due_at,
@@ -532,33 +578,53 @@ async function seed() {
 
   console.log("Demo users seeded.");
 
-  const biochemistryLabId = await upsertLab({
+  const biochemistryDepartmentId = await upsertDepartment({
     hospitalId: cuhHospitalId,
     name: "Biochemistry",
     isPoc: false,
   });
-  const immunologyLabId = await upsertLab({
+  const immunologyDepartmentId = await upsertDepartment({
     hospitalId: cuhHospitalId,
     name: "Immunology",
     isPoc: false,
   });
-  const pocLabId = await upsertLab({
+  const pocDepartmentId = await upsertDepartment({
     hospitalId: cuhHospitalId,
     name: "Point of Care",
     isPoc: true,
   });
-  const massSpecLabId = await upsertLab({
-    hospitalId: cuhHospitalId,
+
+  const clinicalBiochemistryUnitId = await upsertTrainingUnit({
+    departmentId: biochemistryDepartmentId,
+    name: "Clinical Biochemistry",
+  });
+  const immunologyUnitId = await upsertTrainingUnit({
+    departmentId: immunologyDepartmentId,
+    name: "Immunology Bench",
+  });
+  const bloodGasUnitId = await upsertTrainingUnit({
+    departmentId: pocDepartmentId,
+    name: "Blood Gas",
+  });
+  await upsertTrainingUnit({
+    departmentId: pocDepartmentId,
+    name: "Glucose Meter",
+  });
+  const massSpecLabId = await upsertTrainingUnit({
+    departmentId: biochemistryDepartmentId,
     name: "Mass Spectrometry",
-    isPoc: false,
   });
 
   await Promise.all([
-    assignUserToLab(adminUserId, biochemistryLabId),
-    assignUserToLab(adminUserId, pocLabId),
+    assignUserToLab(adminUserId, clinicalBiochemistryUnitId),
+    assignUserToLab(adminUserId, bloodGasUnitId),
     assignUserToLab(jackCoordinatorId, massSpecLabId),
     assignUserToLab(seanTrainerId, massSpecLabId),
     assignUserToLab(ciaraScientistId, massSpecLabId),
+    assignUserToLab(ciaraScientistId, clinicalBiochemistryUnitId),
+    assignUserToLab(seanTrainerId, clinicalBiochemistryUnitId),
+    assignUserToLab(jackCoordinatorId, bloodGasUnitId),
+    assignUserToLab(adminUserId, immunologyUnitId),
   ]);
 
   console.log("Labs and lab memberships seeded.");

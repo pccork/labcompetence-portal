@@ -16,6 +16,8 @@ export interface TrainingAssignment {
   target_staff_type: StaffType;
   lab_id: number;
   lab_name: string;
+  department_id: number;
+  department_name: string;
   lab_hospital_id: number;
   lab_hospital_name: string;
   lab_is_poc: boolean;
@@ -31,6 +33,7 @@ export interface TrainingAssignment {
 export interface TemplateAssignmentScope {
   template_id: number;
   lab_id: number;
+  department_id: number;
   hospital_id: number;
   is_poc: boolean;
   target_staff_type: StaffType;
@@ -50,8 +53,10 @@ const trainingAssignmentSelect = `
     t.form_family_reference,
     t.template_kind,
     t.target_staff_type,
-    ta.lab_id,
-    l.name AS lab_name,
+    ta.training_unit_id AS lab_id,
+    tu.name AS lab_name,
+    l.id AS department_id,
+    l.name AS department_name,
     l.hospital_id AS lab_hospital_id,
     lab_hospital.name AS lab_hospital_name,
     l.is_poc AS lab_is_poc,
@@ -66,7 +71,8 @@ const trainingAssignmentSelect = `
   INNER JOIN users trainee ON trainee.id = ta.user_id
   INNER JOIN hospitals trainee_hospital ON trainee_hospital.id = trainee.hospital_id
   INNER JOIN templates t ON t.id = ta.template_id
-  INNER JOIN labs l ON l.id = ta.lab_id
+  INNER JOIN training_units tu ON tu.id = ta.training_unit_id
+  INNER JOIN labs l ON l.id = tu.lab_id
   INNER JOIN hospitals lab_hospital ON lab_hospital.id = l.hospital_id
   LEFT JOIN users assigner ON assigner.id = ta.assigned_by
 `;
@@ -79,12 +85,14 @@ export async function findTemplateAssignmentScopeByTemplateId(
     `
     SELECT
       t.id AS template_id,
-      l.id AS lab_id,
+      tu.id AS lab_id,
+      l.id AS department_id,
       l.hospital_id,
       l.is_poc,
       t.target_staff_type
     FROM templates t
-    INNER JOIN labs l ON l.id = t.lab_id
+    INNER JOIN training_units tu ON tu.id = t.training_unit_id
+    INNER JOIN labs l ON l.id = tu.lab_id
     WHERE t.id = $1
     `,
     [templateId]
@@ -157,11 +165,20 @@ export async function createTrainingAssignment(
       user_id,
       template_id,
       lab_id,
+      training_unit_id,
       assigned_by,
       renewal_interval_months,
       next_due_at
     )
-    VALUES ($1, $2, $3, $4, $5, $6)
+    VALUES (
+      $1,
+      $2,
+      (SELECT lab_id FROM training_units WHERE id = $3),
+      $3,
+      $4,
+      $5,
+      $6
+    )
     RETURNING id
     `,
     [

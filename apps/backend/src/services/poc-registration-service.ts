@@ -18,6 +18,8 @@ export interface PocRegistrationLink {
   created_at: Date;
   lab_id: number;
   lab_name: string;
+  department_id: number;
+  department_name: string;
   lab_is_poc: boolean;
   hospital_id: number;
   hospital_name: string;
@@ -40,6 +42,8 @@ export interface PocTrainingRequest {
   trainee_email: string;
   lab_id: number;
   lab_name: string;
+  department_id: number;
+  department_name: string;
   lab_hospital_id: number;
   lab_hospital_name: string;
   lab_is_poc: boolean;
@@ -64,13 +68,16 @@ export async function listPocRegistrationLinks(db: Pool) {
       prl.default_training_location,
       prl.default_training_time_details,
       prl.created_at,
-      l.id AS lab_id,
-      l.name AS lab_name,
+      tu.id AS lab_id,
+      tu.name AS lab_name,
+      l.id AS department_id,
+      l.name AS department_name,
       l.is_poc AS lab_is_poc,
       h.id AS hospital_id,
       h.name AS hospital_name
     FROM poc_registration_links prl
-    INNER JOIN labs l ON l.id = prl.lab_id
+    INNER JOIN training_units tu ON tu.id = prl.training_unit_id
+    INNER JOIN labs l ON l.id = tu.lab_id
     INNER JOIN hospitals h ON h.id = l.hospital_id
     ORDER BY prl.created_at DESC
     `
@@ -92,13 +99,16 @@ export async function findPocRegistrationLinkByCode(
       prl.default_training_location,
       prl.default_training_time_details,
       prl.created_at,
-      l.id AS lab_id,
-      l.name AS lab_name,
+      tu.id AS lab_id,
+      tu.name AS lab_name,
+      l.id AS department_id,
+      l.name AS department_name,
       l.is_poc AS lab_is_poc,
       h.id AS hospital_id,
       h.name AS hospital_name
     FROM poc_registration_links prl
-    INNER JOIN labs l ON l.id = prl.lab_id
+    INNER JOIN training_units tu ON tu.id = prl.training_unit_id
+    INNER JOIN labs l ON l.id = tu.lab_id
     INNER JOIN hospitals h ON h.id = l.hospital_id
     WHERE prl.code = $1
     `,
@@ -120,11 +130,18 @@ export async function createPocRegistrationLink(
     `
     INSERT INTO poc_registration_links (
       lab_id,
+      training_unit_id,
       code,
       default_training_location,
       default_training_time_details
     )
-    VALUES ($1, $2, $3, $4)
+    VALUES (
+      (SELECT lab_id FROM training_units WHERE id = $1),
+      $1,
+      $2,
+      $3,
+      $4
+    )
     RETURNING code
     `,
     [
@@ -217,17 +234,19 @@ export async function registerTraineeFromPocLink(
         registration_link_id,
         user_id,
         lab_id,
+        training_unit_id,
         is_training_approved,
         trainer_reply_status,
         training_location,
         training_time_details
       )
-      VALUES ($1, $2, $3, true, $4, $5, $6)
+      VALUES ($1, $2, $3, $4, true, $5, $6, $7)
       RETURNING id
       `,
       [
         registrationLink.id,
         user.id,
+        registrationLink.department_id,
         registrationLink.lab_id,
         PocTrainingRequestStatus.PENDING_TRAINER_REPLY,
         registrationLink.default_training_location,
@@ -244,15 +263,18 @@ export async function registerTraineeFromPocLink(
     const labResult = await client.query<Lab>(
       `
       SELECT
-        l.id,
+        tu.id,
+        l.id AS department_id,
+        l.name AS department_name,
         l.hospital_id,
         h.name AS hospital_name,
-        l.name,
+        tu.name,
         l.is_poc,
-        l.created_at
-      FROM labs l
+        tu.created_at
+      FROM training_units tu
+      INNER JOIN labs l ON l.id = tu.lab_id
       INNER JOIN hospitals h ON h.id = l.hospital_id
-      WHERE l.id = $1
+      WHERE tu.id = $1
       `,
       [registrationLink.lab_id]
     );
@@ -303,8 +325,10 @@ export async function listPocTrainingRequests(
       trainee_hospital.name AS trainee_hospital_name,
       u.name AS trainee_name,
       u.email AS trainee_email,
-      ptr.lab_id,
-      l.name AS lab_name,
+      ptr.training_unit_id AS lab_id,
+      tu.name AS lab_name,
+      l.id AS department_id,
+      l.name AS department_name,
       l.hospital_id AS lab_hospital_id,
       lab_hospital.name AS lab_hospital_name,
       l.is_poc AS lab_is_poc,
@@ -320,7 +344,8 @@ export async function listPocTrainingRequests(
     FROM poc_training_requests ptr
     INNER JOIN users u ON u.id = ptr.user_id
     INNER JOIN hospitals trainee_hospital ON trainee_hospital.id = u.hospital_id
-    INNER JOIN labs l ON l.id = ptr.lab_id
+    INNER JOIN training_units tu ON tu.id = ptr.training_unit_id
+    INNER JOIN labs l ON l.id = tu.lab_id
     INNER JOIN hospitals lab_hospital ON lab_hospital.id = l.hospital_id
     LEFT JOIN users responder ON responder.id = ptr.responded_by
     WHERE (
@@ -350,8 +375,10 @@ export async function findPocTrainingRequestById(
       trainee_hospital.name AS trainee_hospital_name,
       u.name AS trainee_name,
       u.email AS trainee_email,
-      ptr.lab_id,
-      l.name AS lab_name,
+      ptr.training_unit_id AS lab_id,
+      tu.name AS lab_name,
+      l.id AS department_id,
+      l.name AS department_name,
       l.hospital_id AS lab_hospital_id,
       lab_hospital.name AS lab_hospital_name,
       l.is_poc AS lab_is_poc,
@@ -367,7 +394,8 @@ export async function findPocTrainingRequestById(
     FROM poc_training_requests ptr
     INNER JOIN users u ON u.id = ptr.user_id
     INNER JOIN hospitals trainee_hospital ON trainee_hospital.id = u.hospital_id
-    INNER JOIN labs l ON l.id = ptr.lab_id
+    INNER JOIN training_units tu ON tu.id = ptr.training_unit_id
+    INNER JOIN labs l ON l.id = tu.lab_id
     INNER JOIN hospitals lab_hospital ON lab_hospital.id = l.hospital_id
     LEFT JOIN users responder ON responder.id = ptr.responded_by
     WHERE ptr.id = $1
@@ -429,7 +457,9 @@ export async function replyToPocTrainingRequest(
         lab_id: number;
       }>(
         `
-        SELECT user_id, lab_id
+        SELECT
+          user_id,
+          training_unit_id AS lab_id
         FROM poc_training_requests
         WHERE id = $1
         `,
@@ -444,9 +474,9 @@ export async function replyToPocTrainingRequest(
 
       await client.query(
         `
-        INSERT INTO user_labs (user_id, lab_id)
+        INSERT INTO user_training_units (user_id, training_unit_id)
         VALUES ($1, $2)
-        ON CONFLICT (user_id, lab_id) DO NOTHING
+        ON CONFLICT (user_id, training_unit_id) DO NOTHING
         `,
         [request.user_id, request.lab_id]
       );
