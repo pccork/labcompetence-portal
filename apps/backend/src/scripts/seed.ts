@@ -492,36 +492,52 @@ function isoDaysAgo(days: number) {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
 
-function buildMassSpectrometryTrainingSchema(input: {
+function buildForCuhPat2TemplateSchema(input: {
+  sectionName: string;
   title: string;
-  eventCode: string;
-  assessmentCode: string;
-  description: string;
-  objectives: string[];
-  tasks: Array<{
+  eventCode?: string;
+  eventDescription?: string;
+  eventObjectives?: string[];
+  assessmentCode?: string;
+  assessmentDescription?: string;
+  assessmentObjectives?: string[];
+  competencyTasks?: Array<{
     taskLabel: string;
     method: string;
   }>;
-  references: string[];
+  references?: string[];
+  additionalSections?: Array<Record<string, unknown>>;
 }) {
   return {
     formTitle: "Training Event and Competency Assessment Form",
     formFamilyReference: "FOR-CUH-PAT-2",
-    sectionName: "Mass Spectrometry",
+    sectionName: input.sectionName,
     documentTitle: input.title,
     sections: [
-      {
-        type: "training_event",
-        code: input.eventCode,
-        description: input.description,
-        objectives: input.objectives,
-        referenceDocuments: input.references,
-      },
-      {
-        type: "competency_assessment",
-        code: input.assessmentCode,
-        tasks: input.tasks,
-      },
+      ...(input.eventCode
+        ? [
+            {
+              type: "training_event",
+              code: input.eventCode,
+              description: input.eventDescription ?? "",
+              objectives: input.eventObjectives ?? [],
+              referenceDocuments: input.references ?? [],
+            },
+          ]
+        : []),
+      ...(input.assessmentCode
+        ? [
+            {
+              type: "competency_assessment",
+              code: input.assessmentCode,
+              description: input.assessmentDescription ?? "",
+              objectives: input.assessmentObjectives ?? [],
+              tasks: input.competencyTasks ?? [],
+              referenceDocuments: input.references ?? [],
+            },
+          ]
+        : []),
+      ...(input.additionalSections ?? []),
       {
         type: "signature_block",
         fields: [
@@ -614,6 +630,38 @@ async function seed() {
     departmentId: biochemistryDepartmentId,
     name: "Mass Spectrometry",
   });
+  const au5800UnitId = await upsertTrainingUnit({
+    departmentId: biochemistryDepartmentId,
+    name: "AU5800 Clinical Chemistry",
+  });
+  const idsI10UnitId = await upsertTrainingUnit({
+    departmentId: biochemistryDepartmentId,
+    name: "IDS-i10",
+  });
+  const dxa5000UnitId = await upsertTrainingUnit({
+    departmentId: biochemistryDepartmentId,
+    name: "DXA 5000",
+  });
+  const faecalCalprotectinUnitId = await upsertTrainingUnit({
+    departmentId: biochemistryDepartmentId,
+    name: "Faecal Calprotectin",
+  });
+  const dynamicFunctionTestsUnitId = await upsertTrainingUnit({
+    departmentId: biochemistryDepartmentId,
+    name: "Dynamic Function Tests",
+  });
+  const authorisationUnitId = await upsertTrainingUnit({
+    departmentId: biochemistryDepartmentId,
+    name: "Result Authorisation",
+  });
+  const seniorStaffUnitId = await upsertTrainingUnit({
+    departmentId: biochemistryDepartmentId,
+    name: "Senior Staff Biochemistry",
+  });
+  const trainingCoordinatorUnitId = await upsertTrainingUnit({
+    departmentId: biochemistryDepartmentId,
+    name: "Training Co-ordinator",
+  });
 
   await Promise.all([
     assignUserToLab(adminUserId, clinicalBiochemistryUnitId),
@@ -625,6 +673,30 @@ async function seed() {
     assignUserToLab(seanTrainerId, clinicalBiochemistryUnitId),
     assignUserToLab(jackCoordinatorId, bloodGasUnitId),
     assignUserToLab(adminUserId, immunologyUnitId),
+    ...[
+      au5800UnitId,
+      idsI10UnitId,
+      dxa5000UnitId,
+      faecalCalprotectinUnitId,
+      dynamicFunctionTestsUnitId,
+      authorisationUnitId,
+      seniorStaffUnitId,
+      trainingCoordinatorUnitId,
+    ].flatMap((trainingUnitId) => [
+      assignUserToLab(adminUserId, trainingUnitId),
+      assignUserToLab(jackCoordinatorId, trainingUnitId),
+      assignUserToLab(seanTrainerId, trainingUnitId),
+    ]),
+    ...[
+      au5800UnitId,
+      idsI10UnitId,
+      dxa5000UnitId,
+      faecalCalprotectinUnitId,
+      dynamicFunctionTestsUnitId,
+      authorisationUnitId,
+    ].map((trainingUnitId) =>
+      assignUserToLab(ciaraScientistId, trainingUnitId)
+    ),
   ]);
 
   console.log("Labs and lab memberships seeded.");
@@ -636,18 +708,24 @@ async function seed() {
     formFamilyReference: "FOR-CUH-PAT-2",
     templateKind: "training_event_competency",
     targetStaffType: StaffType.BASIC_GRADE_SCIENTIST,
-    schemaJson: buildMassSpectrometryTrainingSchema({
+    schemaJson: buildForCuhPat2TemplateSchema({
+      sectionName: "Mass Spectrometry",
       title: "Mass Spectrometry Steroid Panel Training",
       eventCode: "TE/MS-STEROIDS",
       assessmentCode: "CA/MS-STEROIDS",
-      description:
+      eventDescription:
         "Training on LC-MS/MS steroid panel sample preparation, calibration review, batch setup, peak integration checks, and result authorisation workflow under supervision.",
-      objectives: [
+      eventObjectives: [
         "Prepare patient samples and calibration/QC material for the Mass Spectrometry steroid panel.",
         "Review chromatography and flag integration issues before supervised authorisation.",
         "Follow current SOPs and instrument troubleshooting guidance for Mass Spectrometry batch work.",
       ],
-      tasks: [
+      assessmentDescription:
+        "The participant will demonstrate Mass Spectrometry steroid panel competency to a Senior Medical Scientist or nominated trainer using direct observation and result review.",
+      assessmentObjectives: [
+        "The trainer will deem the participant competent to prepare, process, review, and escalate Mass Spectrometry steroid panel work.",
+      ],
+      competencyTasks: [
         {
           taskLabel: "Sample preparation and batch setup",
           method: "DOWP",
@@ -676,17 +754,23 @@ async function seed() {
     formFamilyReference: "FOR-CUH-PAT-2",
     templateKind: "training_event_competency",
     targetStaffType: StaffType.BASIC_GRADE_SCIENTIST,
-    schemaJson: buildMassSpectrometryTrainingSchema({
+    schemaJson: buildForCuhPat2TemplateSchema({
+      sectionName: "Mass Spectrometry",
       title: "Mass Spectrometry Therapeutic Drug Monitoring Training",
       eventCode: "TE/MS-TDM",
       assessmentCode: "CA/MS-TDM",
-      description:
+      eventDescription:
         "Training on therapeutic drug monitoring sample processing, internal standard review, acceptance criteria, and escalation of failed analytical runs.",
-      objectives: [
+      eventObjectives: [
         "Process TDM samples and review internal standard response acceptance criteria.",
         "Identify failed runs, document corrective actions, and escalate to the senior scientist/trainer.",
       ],
-      tasks: [
+      assessmentDescription:
+        "The participant will demonstrate TDM sample processing, analytical run review, and troubleshooting competency under Senior Medical Scientist review.",
+      assessmentObjectives: [
+        "The trainer will deem the participant competent to complete TDM batch work and escalation documentation.",
+      ],
+      competencyTasks: [
         {
           taskLabel: "TDM sample processing and analytical batch review",
           method: "DOWP",
@@ -710,17 +794,23 @@ async function seed() {
     formFamilyReference: "FOR-CUH-PAT-2",
     templateKind: "senior_staff_programme",
     targetStaffType: StaffType.SENIOR_MEDICAL_SCIENTIST,
-    schemaJson: buildMassSpectrometryTrainingSchema({
+    schemaJson: buildForCuhPat2TemplateSchema({
+      sectionName: "Mass Spectrometry",
       title: "Mass Spectrometry Senior Scientist Trainer Review",
       eventCode: "TE/MS-SENIOR",
       assessmentCode: "CA/MS-SENIOR",
-      description:
+      eventDescription:
         "Annual senior scientist review for Mass Spectrometry supervision, escalation, assay governance, and trainee support responsibilities.",
-      objectives: [
+      eventObjectives: [
         "Supervise Mass Spectrometry workflow and review trainee competency evidence.",
         "Apply escalation, change-control, and quality governance processes for section incidents and assay updates.",
       ],
-      tasks: [
+      assessmentDescription:
+        "Annual senior scientist competency review based on governance records, troubleshooting review, and supervised section signoff activity.",
+      assessmentObjectives: [
+        "The training co-ordinator will deem the participant competent to supervise, escalate, and support Mass Spectrometry training governance.",
+      ],
+      competencyTasks: [
         {
           taskLabel: "Review of trainee records and section signoff governance",
           method: "DORR",
@@ -737,7 +827,410 @@ async function seed() {
     }),
   });
 
-  console.log("Mass Spectrometry demo templates seeded.");
+  const au5800Template = await upsertTemplateWithVersion({
+    name: "FOR-CUH-PAT-2 Clinical Chemistry AU5800",
+    labId: au5800UnitId,
+    createdBy: seanTrainerId,
+    formFamilyReference: "FOR-CUH-PAT-2",
+    templateKind: "training_event_competency",
+    targetStaffType: StaffType.BASIC_GRADE_SCIENTIST,
+    schemaJson: buildForCuhPat2TemplateSchema({
+      sectionName: "Clinical Chemistry AU5800",
+      title: "Clinical Chemistry AU5800 Training and Competency",
+      eventCode: "TE/clinical chemistry au5800",
+      assessmentCode: "CA/clinical chemistry au5800",
+      eventDescription:
+        "The trainee has read, understands and signed off the current revision of the documents associated with this area. Training includes review of SOPs and task-based training for tests run on the AU5800 analyser series.",
+      eventObjectives: [
+        "Work in Clinical Chemistry on the AU5800 analyser.",
+        "Label, process and submit a Clinical Chemistry EQA distribution.",
+        "Perform maintenance, reagent loading, calibration, QC, sample processing, and error resolution under supervision before competency assessment.",
+      ],
+      assessmentDescription:
+        "The participant will demonstrate the correct combination of knowledge, skills, and attitude in Clinical Chemistry AU5800 to the Senior Medical Scientist or appointee during competency assessment.",
+      assessmentObjectives: [
+        "The participant will be deemed competent to perform routine maintenance and reagent loading.",
+        "The participant will be deemed competent to perform calibration, QC, sample processing, error resolution, and EQA distribution handling.",
+      ],
+      competencyTasks: [
+        {
+          taskLabel: "Routine maintenance and reagent loading",
+          method: "DOWP",
+        },
+        {
+          taskLabel: "Calibration and quality control",
+          method: "DOWP",
+        },
+        {
+          taskLabel: "Sample processing, error-message review, and resolution",
+          method: "DOWP",
+        },
+        {
+          taskLabel: "Clinical Chemistry EQA distribution processing",
+          method: "DOWP",
+        },
+      ],
+      references: [
+        "PPG-CUH-PAT-1420",
+        "PPG-CUH-PAT-200",
+        "FOR-CUH-PAT-1423",
+        "FOR-CUH-PAT-4041",
+        "FOR-CUH-PAT-1459",
+        "FOR-CUH-PAT-158",
+        "FOR-CUH-PAT-126",
+        "INS-CUH-PAT-127",
+      ],
+    }),
+  });
+
+  const idsI10Template = await upsertTemplateWithVersion({
+    name: "FOR-CUH-PAT-2 IDS-i10",
+    labId: idsI10UnitId,
+    createdBy: seanTrainerId,
+    formFamilyReference: "FOR-CUH-PAT-2",
+    templateKind: "training_event_competency",
+    targetStaffType: StaffType.BASIC_GRADE_SCIENTIST,
+    schemaJson: buildForCuhPat2TemplateSchema({
+      sectionName: "IDS-i10",
+      title: "IDS-i10 Training and Competency",
+      eventCode: "TE/IDS-i10",
+      assessmentCode: "CA/IDS-I10",
+      eventDescription:
+        "The trainee has read, understands and signed off the current revision of documents associated with this area. Training includes review of SOPs and task-based training for tests run on the IDS-i10 analyser.",
+      eventObjectives: [
+        "Work on the IDS-i10 analyser.",
+        "Perform routine maintenance, calibration, QC, sample processing, error review/resolution, and patient result authorisation under Senior Medical Scientist supervision before competency assessment.",
+      ],
+      assessmentDescription:
+        "The participant will demonstrate the correct combination of knowledge and skills in the IDS-i10 area of Biochemistry to the Senior Medical Scientist or nominated assessor.",
+      assessmentObjectives: [
+        "The participant will be deemed competent to perform routine IDS-i10 maintenance, calibration, QC, sample processing, error review/resolution, and result authorisation.",
+      ],
+      competencyTasks: [
+        {
+          taskLabel:
+            "Routine IDS-i10 maintenance, calibration, QC, sample processing, and error resolution",
+          method: "DOEM + DOWP",
+        },
+        {
+          taskLabel: "Patient result authorisation",
+          method: "DORR",
+        },
+      ],
+      references: [
+        "PPG-CUH-PAT-265",
+        "EXT-CUH-PAT-4038 IDS i10 User Manual",
+        "EXT-CUH-PAT-4039 IDS i10 Application Training Guide",
+        "FOR-CUH-PAT-1457",
+        "Patient Sample / EQA",
+      ],
+    }),
+  });
+
+  const faecalCalprotectinTemplate = await upsertTemplateWithVersion({
+    name: "FOR-CUH-PAT-2 Faecal Calprotectin",
+    labId: faecalCalprotectinUnitId,
+    createdBy: seanTrainerId,
+    formFamilyReference: "FOR-CUH-PAT-2",
+    templateKind: "training_event_competency",
+    targetStaffType: StaffType.BASIC_GRADE_SCIENTIST,
+    schemaJson: buildForCuhPat2TemplateSchema({
+      sectionName: "Faecal Calprotectin",
+      title: "Faecal Calprotectin Training and Competency",
+      eventCode: "TE/Faecal Calprotectin",
+      assessmentCode: "CA/Faecal Calprotectin",
+      eventDescription:
+        "The trainee has read, understands and signed off the current revision of PPG-CUH-PAT-1420.",
+      eventObjectives: [
+        "Know the cold-room storage area for reagents, calibrator, QC, and CALEX Cap.",
+        "Run IQC, check results, and add FCal reagent to the reagent list for analysis days.",
+        "Understand EQA sample processing and result authorisation for Faecal Calprotectin.",
+      ],
+      assessmentDescription:
+        "The participant will demonstrate the correct combination of knowledge, skills, and attitude in Faecal Calprotectin to the Senior Medical Scientist or appointee.",
+      assessmentObjectives: [
+        "The participant will be deemed competent to perform the Faecal Calprotectin assay.",
+      ],
+      competencyTasks: [
+        {
+          taskLabel: "Cold-room storage, reagent handling, and CALEX Cap setup",
+          method: "DOWP",
+        },
+        {
+          taskLabel: "IQC run, result review, and assay authorisation",
+          method: "DOWP",
+        },
+        {
+          taskLabel: "EQA sample processing",
+          method: "DOWP",
+        },
+      ],
+      references: [
+        "PPG-CUH-PAT-1420",
+        "FOR-CUH-PAT-158",
+      ],
+    }),
+  });
+
+  const dxaCompetencyTemplate = await upsertTemplateWithVersion({
+    name: "FOR-CUH-PAT-2 Beckman Coulter DXA 5000 Competency",
+    labId: dxa5000UnitId,
+    createdBy: seanTrainerId,
+    formFamilyReference: "FOR-CUH-PAT-2",
+    templateKind: "competency_only",
+    targetStaffType: StaffType.BASIC_GRADE_SCIENTIST,
+    schemaJson: buildForCuhPat2TemplateSchema({
+      sectionName: "DXA 5000",
+      title: "Beckman Coulter DXA 5000 Competency Assessment",
+      assessmentCode: "CA/Beckman Coulter DXA 5000 automated system",
+      assessmentDescription:
+        "The participant will demonstrate the correct combination of knowledge, skills, and attitude in maintaining, operating, and troubleshooting the DXA 5000 track system during competency assessment. Training includes SOP review and task-based training for PPG-CUH-PAT-4041.",
+      assessmentObjectives: [
+        "The participant will be deemed competent to perform daily operation, maintenance, and troubleshooting of the DXA 5000 automated system.",
+      ],
+      competencyTasks: [
+        {
+          taskLabel: "DXA 5000 operation and maintenance competency questionnaire",
+          method: "WA + DOWP",
+        },
+        {
+          taskLabel: "DXA 5000 troubleshooting and sample flow review",
+          method: "DOEM",
+        },
+      ],
+      references: [
+        "PPG-CUH-PAT-4041",
+        "FOR-CUH-PAT-4063 DXA Competency Questionnaire",
+      ],
+    }),
+  });
+
+  const dxaTrainingTemplate = await upsertTemplateWithVersion({
+    name: "FOR-CUH-PAT-2 Beckman DxA 5000 Training Event",
+    labId: dxa5000UnitId,
+    createdBy: seanTrainerId,
+    formFamilyReference: "FOR-CUH-PAT-2",
+    templateKind: "training_event",
+    targetStaffType: StaffType.BASIC_GRADE_SCIENTIST,
+    schemaJson: buildForCuhPat2TemplateSchema({
+      sectionName: "DXA 5000",
+      title: "Beckman DxA 5000 Training Event",
+      eventCode: "TE/Beckman DxA 5000",
+      eventDescription:
+        "The trainee understands operation and maintenance of the DxA 5000, using the DxA 5000 in-lab training manual.",
+      eventObjectives: [
+        "Understand the DxA System Console and the function of each module.",
+        "Load samples, unload error racks, and resolve system/sample errors.",
+        "Complete daily and weekly maintenance, sample recall, archive/autodisposal handling, and tube robot troubleshooting.",
+      ],
+      references: ["DxA 5000 In Lab training manual"],
+    }),
+  });
+
+  const dftTemplate = await upsertTemplateWithVersion({
+    name: "FOR-CUH-PAT-2 Dynamic Function Tests",
+    labId: dynamicFunctionTestsUnitId,
+    createdBy: seanTrainerId,
+    formFamilyReference: "FOR-CUH-PAT-2",
+    templateKind: "training_event_competency",
+    targetStaffType: StaffType.BASIC_GRADE_SCIENTIST,
+    schemaJson: buildForCuhPat2TemplateSchema({
+      sectionName: "Dynamic Function Tests",
+      title: "Dynamic Function Tests Training and Competency",
+      eventCode: "TE/Dynamic Function Tests",
+      assessmentCode: "CA/Dynamic Function Tests",
+      eventDescription:
+        "The trainee has read, understands and signed off the current revision of PPG-CUH-PAT-1400. Training includes SOP review and task-based training for tests processed as dynamic function tests.",
+      eventObjectives: [
+        "Process samples as DFTs.",
+        "Book in CSYN, CIST, CGST, CACROG, CCLO/CARG, CLHRH, CTRHT, and CCDC dynamic function tests as applicable.",
+        "Authorise DFT samples and understand DFT storage box/scheduled DFT workflows.",
+      ],
+      assessmentDescription:
+        "The participant will demonstrate dynamic function test processing and authorisation competency after SOP review and supervised task-based training.",
+      assessmentObjectives: [
+        "The participant will be deemed competent to book in, process, authorise, and store/schedule DFT samples appropriately.",
+      ],
+      competencyTasks: [
+        {
+          taskLabel: "Book in and process dynamic function test samples",
+          method: "DOWP",
+        },
+        {
+          taskLabel: "Authorise DFT samples and manage DFT storage/scheduling",
+          method: "DOWP + DORR",
+        },
+      ],
+      references: ["PPG-CUH-PAT-1400"],
+    }),
+  });
+
+  const authorisationTemplate = await upsertTemplateWithVersion({
+    name: "FOR-CUH-PAT-2 Authorisation of Results",
+    labId: authorisationUnitId,
+    createdBy: seanTrainerId,
+    formFamilyReference: "FOR-CUH-PAT-2",
+    templateKind: "training_event_competency",
+    targetStaffType: StaffType.BASIC_GRADE_SCIENTIST,
+    schemaJson: buildForCuhPat2TemplateSchema({
+      sectionName: "Result Authorisation",
+      title: "Authorisation of Results Training and Competency",
+      eventCode: "TE/AUTHORISATION OF RESULTS",
+      assessmentCode: "CA/AUTHORISATION OF RESULTS",
+      eventDescription:
+        "The trainee has read, understands and signed off the current revision of documents associated with this area. Training includes SOP review and task-based training for PPG-CUH-PAT-264.",
+      eventObjectives: [
+        "Authorise results in Biochemistry.",
+        "Perform Main Lab authorisation for CMISC, CTDM, CROUT, and CDXI under supervision.",
+        "Complete the authorisation MCQ booklets for new entrants post 2019.",
+      ],
+      assessmentDescription:
+        "The participant will demonstrate authorisation-of-results competency in Biochemistry Main Lab to the Senior Medical Scientist or appointee.",
+      assessmentObjectives: [
+        "The participant will be deemed competent for Main Lab Biochemistry authorisation workflows and MCQ completion where required.",
+      ],
+      competencyTasks: [
+        {
+          taskLabel: "Main Lab authorisation for CMISC, CTDM, CROUT, and CDXI",
+          method: "DOWP",
+        },
+        {
+          taskLabel: "Authorisation MCQ booklet completion for new entrants post 2019",
+          method: "WA",
+        },
+      ],
+      references: [
+        "PPG-CUH-PAT-264",
+        "Patient sample assigned by Senior Medical Scientist during signoff",
+      ],
+    }),
+  });
+
+  const seniorBiochemistryTemplate = await upsertTemplateWithVersion({
+    name: "FOR-CUH-PAT-2 Senior Medical Scientist Biochemistry",
+    labId: seniorStaffUnitId,
+    createdBy: jackCoordinatorId,
+    formFamilyReference: "FOR-CUH-PAT-2",
+    templateKind: "senior_staff_programme",
+    targetStaffType: StaffType.SENIOR_MEDICAL_SCIENTIST,
+    schemaJson: buildForCuhPat2TemplateSchema({
+      sectionName: "Senior Staff Biochemistry",
+      title: "Senior Medical Scientist Biochemistry Training and Competency",
+      eventCode: "TE/Senior STAFF BIOCHEMISTRY",
+      assessmentCode: "CA/Senior Medical Scientist Biochemistry",
+      eventDescription:
+        "Senior Medical Scientist programme covering quality management, ISO 15189 awareness, health and safety, data protection, leadership, communication, problem-solving, staff performance, and management of equipment, materials, workflow, and processes.",
+      eventObjectives: [
+        "Understand defined section roles/responsibilities, ISO 15189:2022 requirements, QMS implementation, health and safety, data protection, ethical standards, leadership, communication, problem-solving, and service management.",
+        "Support the Chief Medical Scientist and Consultant Clinical Biochemist in the operation and management of the Clinical Chemistry service.",
+      ],
+      assessmentDescription:
+        "Biochemistry Senior Medical Scientist competency assessment based on review of records after participation in the Senior Staff programme.",
+      assessmentObjectives: [
+        "Comply with the QMS, create a supportive/safe environment, implement staff training and competency programmes, manage documents, equipment, consumables, IQC, EQA, and communication/meetings.",
+      ],
+      competencyTasks: [
+        {
+          taskLabel: "QMS, audits, non-conformance/CAPA, and risk management",
+          method: "DO/RR",
+        },
+        {
+          taskLabel: "Health and safety, FOI/data protection, and staff/personnel management",
+          method: "DO/RR",
+        },
+        {
+          taskLabel: "Document control, equipment maintenance, consumables, IQC, EQA, communication, complaints, change management, and verification/flexible scope",
+          method: "DO/RR",
+        },
+      ],
+      references: [
+        "FOR-CUH-PAT-1747",
+        "FOR-CUH-PAT-1596",
+        "INS-CUH-PAT-3002",
+        "PPG-CUH-PAT-21",
+        "PPG-CUH-PAT-3000",
+        "PPG-CUH-PAT-1763",
+        "PPG-CUH-PAT-19",
+        "PPG-CUH-PAT-26",
+        "PPG-CUH-PAT-29",
+        "PPG-CUH-PAT-40",
+        "PPG-CUH-PAT-8",
+        "PPG-CUH-PAT-190",
+        "PPG-CUH-PAT-4",
+        "INS-CUH-PAT-1407",
+        "PPG-CUH-PAT-200",
+        "EXT-CUH-PAT-50",
+        "INS-CUH-PAT-178",
+        "PPG-CUH-PAT-1700",
+      ],
+      additionalSections: [
+        {
+          type: "training_methods_and_materials",
+          trainingMethods: [
+            "PPT presentation",
+            "Computer-based",
+            "Self study",
+            "Observe demonstration",
+          ],
+          trainingMaterials: [
+            "Process flowchart or table",
+            "Operator manual / Inserts",
+            "Written procedures",
+            "Handouts",
+            "External courses",
+          ],
+        },
+      ],
+    }),
+  });
+
+  const trainingCoordinatorTemplate = await upsertTemplateWithVersion({
+    name: "FOR-CUH-PAT-2 Training Co-ordinator",
+    labId: trainingCoordinatorUnitId,
+    createdBy: jackCoordinatorId,
+    formFamilyReference: "FOR-CUH-PAT-2",
+    templateKind: "training_coordinator_programme",
+    targetStaffType: StaffType.TRAINING_COORDINATOR,
+    schemaJson: buildForCuhPat2TemplateSchema({
+      sectionName: "Training Co-ordinator",
+      title: "Training Co-ordinator Training and Competency",
+      eventCode: "TE/TRAINING CO-ORDINATOR",
+      assessmentCode: "CA/TRAINING CO-ORDINATOR",
+      eventDescription:
+        "The trainee has read, understands and signed off the current revision of PPG-CUH-PAT-3 Personnel Management and associated documents, and acts as a focal point for training and education in the laboratory.",
+      eventObjectives: [
+        "Participate in the Laboratory Medicine Training and Education Committee and promote a proactive training and education environment.",
+        "Support personnel introduction, review staff performance/development, develop day-to-day training programmes and competencies, record TE/CA on Q-Pulse, review training-system effectiveness, participate in audits, support CPD, and coordinate laboratory students with partner colleges as required.",
+        "Confidently participate in and lead training and education activities required by laboratory management.",
+      ],
+      assessmentDescription:
+        "The participant will demonstrate the correct combination of knowledge, skills, and attitude to perform Training Co-ordinator duties to the Chief Medical Scientist during task-based competency assessment.",
+      assessmentObjectives: [
+        "The Chief Medical Scientist will deem the participant competent to perform the duties of Training Co-ordinator.",
+      ],
+      competencyTasks: [
+        {
+          taskLabel: "Attendance and contribution at Training & Education meetings",
+          method: "DOWP/RR",
+        },
+        {
+          taskLabel: "Personnel introduction completed and recorded",
+          method: "DOWP/RR",
+        },
+        {
+          taskLabel: "Led training session and competency programme and recorded TE/CA on Q-Pulse",
+          method: "DOWP/RR",
+        },
+        {
+          taskLabel: "Performance review and audit participation",
+          method: "DOWP/RR",
+        },
+      ],
+      references: ["PPG-CUH-PAT-3"],
+    }),
+  });
+
+  console.log("Biochemistry demo templates seeded from sample FOR-CUH-PAT-2 forms.");
 
   const ciaraSteroidAssignmentId = await upsertTrainingAssignment({
     userId: ciaraScientistId,
@@ -766,7 +1259,82 @@ async function seed() {
     nextDueAt: addDays(74),
   });
 
-  console.log("Mass Spectrometry demo assignments seeded.");
+  await Promise.all([
+    upsertTrainingAssignment({
+      userId: ciaraScientistId,
+      templateId: au5800Template.templateId,
+      labId: au5800UnitId,
+      assignedBy: jackCoordinatorId,
+      renewalIntervalMonths: 12,
+      nextDueAt: addDays(35),
+    }),
+    upsertTrainingAssignment({
+      userId: ciaraScientistId,
+      templateId: idsI10Template.templateId,
+      labId: idsI10UnitId,
+      assignedBy: jackCoordinatorId,
+      renewalIntervalMonths: 12,
+      nextDueAt: addDays(52),
+    }),
+    upsertTrainingAssignment({
+      userId: ciaraScientistId,
+      templateId: faecalCalprotectinTemplate.templateId,
+      labId: faecalCalprotectinUnitId,
+      assignedBy: jackCoordinatorId,
+      renewalIntervalMonths: 12,
+      nextDueAt: addDays(21),
+    }),
+    upsertTrainingAssignment({
+      userId: ciaraScientistId,
+      templateId: dxaCompetencyTemplate.templateId,
+      labId: dxa5000UnitId,
+      assignedBy: jackCoordinatorId,
+      renewalIntervalMonths: 12,
+      nextDueAt: addDays(90),
+    }),
+    upsertTrainingAssignment({
+      userId: ciaraScientistId,
+      templateId: dxaTrainingTemplate.templateId,
+      labId: dxa5000UnitId,
+      assignedBy: jackCoordinatorId,
+      renewalIntervalMonths: 12,
+      nextDueAt: addDays(89),
+    }),
+    upsertTrainingAssignment({
+      userId: ciaraScientistId,
+      templateId: dftTemplate.templateId,
+      labId: dynamicFunctionTestsUnitId,
+      assignedBy: jackCoordinatorId,
+      renewalIntervalMonths: 12,
+      nextDueAt: addDays(18),
+    }),
+    upsertTrainingAssignment({
+      userId: ciaraScientistId,
+      templateId: authorisationTemplate.templateId,
+      labId: authorisationUnitId,
+      assignedBy: jackCoordinatorId,
+      renewalIntervalMonths: 12,
+      nextDueAt: addDays(64),
+    }),
+    upsertTrainingAssignment({
+      userId: seanTrainerId,
+      templateId: seniorBiochemistryTemplate.templateId,
+      labId: seniorStaffUnitId,
+      assignedBy: jackCoordinatorId,
+      renewalIntervalMonths: 12,
+      nextDueAt: addDays(120),
+    }),
+    upsertTrainingAssignment({
+      userId: jackCoordinatorId,
+      templateId: trainingCoordinatorTemplate.templateId,
+      labId: trainingCoordinatorUnitId,
+      assignedBy: adminUserId,
+      renewalIntervalMonths: 12,
+      nextDueAt: addDays(150),
+    }),
+  ]);
+
+  console.log("Biochemistry demo assignments seeded.");
 
   await upsertTrainingRecord({
     traineeId: ciaraScientistId,

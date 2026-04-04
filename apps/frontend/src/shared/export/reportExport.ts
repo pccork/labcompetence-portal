@@ -358,6 +358,22 @@ function buildTemplateSchemaXml(schemaJson: Record<string, unknown>) {
         `;
       }
 
+      if (section.type === "training_methods_and_materials") {
+        const methods = Array.isArray(section.trainingMethods)
+          ? section.trainingMethods.join("\n")
+          : "";
+        const materials = Array.isArray(section.trainingMaterials)
+          ? section.trainingMaterials.join("\n")
+          : "";
+
+        return `
+          ${createLabelValueTable("Training methods and materials", [
+            ["Training methods", methods],
+            ["Training materials", materials],
+          ])}
+        `;
+      }
+
       return `
         ${createSectionHeading(
           `Additional form section ${index + 1}: ${
