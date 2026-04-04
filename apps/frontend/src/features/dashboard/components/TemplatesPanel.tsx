@@ -43,44 +43,28 @@ const templateKindOptions = [
   { value: "poc_checklist", label: "POC Checklist" },
 ];
 
-const defaultSchemaText = JSON.stringify(
-  {
-    formTitle: "Training Event and Competency Assessment Form",
-    sections: [
-      {
-        type: "training_event",
-        code: "TE/NEW-SECTION",
-        description: "Describe the section training and related SOPs here.",
-        objectives: [
-          "Complete supervised practice in the section",
-          "Demonstrate key maintenance/QC/sample-processing tasks",
-        ],
-        referenceDocuments: ["PPG-CUH-PAT-XXXX"],
-      },
-      {
-        type: "competency_assessment",
-        code: "CA/NEW-SECTION",
-        tasks: [
-          {
-            taskLabel: "Document one competency task here",
-            method: "DOWP",
-          },
-        ],
-      },
-      {
-        type: "signature_block",
-        fields: [
-          "trainer",
-          "scheduled_date",
-          "completed_date",
-          "trainee_signature_date",
-        ],
-      },
-    ],
-  },
-  null,
-  2
-);
+const defaultSignatureFields = [
+  "trainer",
+  "scheduled_date",
+  "completed_date",
+  "trainee_signature_date",
+];
+
+const defaultCompetencyTask = {
+  taskLabel: "Document one competency task here",
+  method: "DOWP",
+};
+
+function getDefaultObjectives() {
+  return [
+    "Complete supervised practice in the section",
+    "Demonstrate key maintenance/QC/sample-processing tasks",
+  ].join("\n");
+}
+
+function getDefaultReferences() {
+  return ["PPG-CUH-PAT-XXXX"].join("\n");
+}
 
 export function TemplatesPanel({
   labs,
@@ -94,6 +78,9 @@ export function TemplatesPanel({
   const [name, setName] = useState("FOR-CUH-PAT-2 New Section");
   const [formFamilyReference, setFormFamilyReference] =
     useState("FOR-CUH-PAT-2");
+  const [formTitle, setFormTitle] = useState(
+    "Training Event and Competency Assessment Form"
+  );
   const [templateKind, setTemplateKind] = useState(
     "training_event_competency"
   );
@@ -101,7 +88,29 @@ export function TemplatesPanel({
     "basic_grade_scientist"
   );
   const [isActive, setIsActive] = useState(true);
-  const [schemaText, setSchemaText] = useState(defaultSchemaText);
+  const [eventCode, setEventCode] = useState("TE/NEW-SECTION");
+  const [eventDescription, setEventDescription] = useState(
+    "Describe the section training and related SOPs here."
+  );
+  const [eventObjectivesText, setEventObjectivesText] = useState(
+    getDefaultObjectives()
+  );
+  const [referenceDocumentsText, setReferenceDocumentsText] = useState(
+    getDefaultReferences()
+  );
+  const [assessmentCode, setAssessmentCode] = useState("CA/NEW-SECTION");
+  const [assessmentDescription, setAssessmentDescription] = useState(
+    "Describe how the trainer will assess competence in this section."
+  );
+  const [assessmentObjectivesText, setAssessmentObjectivesText] = useState(
+    "The trainer will deem the participant competent to perform the key tasks listed below."
+  );
+  const [competencyTasks, setCompetencyTasks] = useState([
+    {
+      ...defaultCompetencyTask,
+    },
+  ]);
+  const [showGeneratedSchema, setShowGeneratedSchema] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [formMessage, setFormMessage] = useState<string | null>(null);
   const [printMessage, setPrintMessage] = useState<string | null>(null);
@@ -135,20 +144,89 @@ export function TemplatesPanel({
       .sort((left, right) => left.name.localeCompare(right.name));
   }, [searchTerm, templates]);
 
+  const selectedLab = useMemo(
+    () => labs.find((lab) => lab.id === labId) ?? null,
+    [labId, labs]
+  );
+
+  const generatedSchema = useMemo(() => {
+    const eventObjectives = eventObjectivesText
+      .split("\n")
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    const referenceDocuments = referenceDocumentsText
+      .split("\n")
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    const assessmentObjectives = assessmentObjectivesText
+      .split("\n")
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    return {
+      formTitle,
+      formFamilyReference,
+      sectionName: selectedLab?.name || "Selected training unit",
+      documentTitle: name,
+      sections: [
+        ...(templateKind === "competency_only"
+          ? []
+          : [
+              {
+                type: "training_event",
+                code: eventCode,
+                description: eventDescription,
+                objectives: eventObjectives,
+                referenceDocuments,
+              },
+            ]),
+        ...(templateKind === "training_event"
+          ? []
+          : [
+              {
+                type: "competency_assessment",
+                code: assessmentCode,
+                description: assessmentDescription,
+                objectives: assessmentObjectives,
+                tasks: competencyTasks.filter(
+                  (task) => task.taskLabel.trim() || task.method.trim()
+                ),
+                referenceDocuments,
+              },
+            ]),
+        {
+          type: "signature_block",
+          fields: defaultSignatureFields,
+        },
+      ],
+    };
+  }, [
+    assessmentCode,
+    assessmentDescription,
+    assessmentObjectivesText,
+    competencyTasks,
+    eventCode,
+    eventDescription,
+    eventObjectivesText,
+    formFamilyReference,
+    formTitle,
+    name,
+    referenceDocumentsText,
+    selectedLab?.name,
+    templateKind,
+  ]);
+
+  const generatedSchemaText = useMemo(
+    () => JSON.stringify(generatedSchema, null, 2),
+    [generatedSchema]
+  );
+
   const handleCreateTemplate = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormMessage(null);
 
-    let schemaJson: Record<string, unknown>;
-
-    try {
-      schemaJson = JSON.parse(schemaText) as Record<string, unknown>;
-    } catch {
-      setFormMessage("Schema JSON is not valid.");
-      return;
-    }
-
-    const selectedLab = labs.find((lab) => lab.id === labId);
     const confirmed = window.confirm(
       `Create template "${name}" for ${
         selectedLab
@@ -169,12 +247,27 @@ export function TemplatesPanel({
         templateKind,
         targetStaffType,
         isActive,
-        schemaJson,
+        schemaJson: generatedSchema,
       })
         .then(() => {
           setFormMessage("Template created successfully.");
           setName("FOR-CUH-PAT-2 New Section");
-          setSchemaText(defaultSchemaText);
+          setFormTitle("Training Event and Competency Assessment Form");
+          setEventCode("TE/NEW-SECTION");
+          setEventDescription(
+            "Describe the section training and related SOPs here."
+          );
+          setEventObjectivesText(getDefaultObjectives());
+          setReferenceDocumentsText(getDefaultReferences());
+          setAssessmentCode("CA/NEW-SECTION");
+          setAssessmentDescription(
+            "Describe how the trainer will assess competence in this section."
+          );
+          setAssessmentObjectivesText(
+            "The trainer will deem the participant competent to perform the key tasks listed below."
+          );
+          setCompetencyTasks([{ ...defaultCompetencyTask }]);
+          setShowGeneratedSchema(false);
           setIsExpandedEditorOpen(false);
         })
         .catch((error) => {
@@ -224,6 +317,22 @@ export function TemplatesPanel({
           type="text"
           value={name}
           onChange={(event) => setName(event.target.value)}
+        />
+      </div>
+
+      <div className="field">
+        <label
+          className="label"
+          htmlFor={expanded ? "template-form-title-expanded" : "template-form-title"}
+        >
+          Printed form title
+        </label>
+        <input
+          id={expanded ? "template-form-title-expanded" : "template-form-title"}
+          className="input"
+          type="text"
+          value={formTitle}
+          onChange={(event) => setFormTitle(event.target.value)}
         />
       </div>
 
@@ -316,19 +425,288 @@ export function TemplatesPanel({
       <div className="field">
         <label
           className="label"
-          htmlFor={expanded ? "template-schema-expanded" : "template-schema"}
+          htmlFor={
+            expanded ? "template-event-description-expanded" : "template-event-description"
+          }
         >
-          Initial schema JSON
+          Training event description
         </label>
-        <textarea
-          id={expanded ? "template-schema-expanded" : "template-schema"}
-          className={`textarea template-schema-editor ${
-            expanded ? "template-schema-editor-expanded" : ""
-          }`}
-          value={schemaText}
-          onChange={(event) => setSchemaText(event.target.value)}
-          spellCheck="false"
-        />
+        <div className="template-form-grid">
+          <div className="field">
+            <label
+              className="label"
+              htmlFor={expanded ? "template-event-code-expanded" : "template-event-code"}
+            >
+              Training event code
+            </label>
+            <input
+              id={expanded ? "template-event-code-expanded" : "template-event-code"}
+              className="input"
+              type="text"
+              value={eventCode}
+              onChange={(event) => setEventCode(event.target.value)}
+              disabled={templateKind === "competency_only"}
+            />
+          </div>
+
+          <div className="field">
+            <label
+              className="label"
+              htmlFor={
+                expanded
+                  ? "template-assessment-code-expanded"
+                  : "template-assessment-code"
+              }
+            >
+              Competency assessment code
+            </label>
+            <input
+              id={
+                expanded
+                  ? "template-assessment-code-expanded"
+                  : "template-assessment-code"
+              }
+              className="input"
+              type="text"
+              value={assessmentCode}
+              onChange={(event) => setAssessmentCode(event.target.value)}
+              disabled={templateKind === "training_event"}
+            />
+          </div>
+        </div>
+
+        {templateKind !== "competency_only" ? (
+          <>
+            <textarea
+              id={
+                expanded
+                  ? "template-event-description-expanded"
+                  : "template-event-description"
+              }
+              className="textarea"
+              value={eventDescription}
+              onChange={(event) => setEventDescription(event.target.value)}
+            />
+
+            <div className="field mt-4">
+              <label
+                className="label"
+                htmlFor={
+                  expanded
+                    ? "template-event-objectives-expanded"
+                    : "template-event-objectives"
+                }
+              >
+                Training event objectives
+              </label>
+              <textarea
+                id={
+                  expanded
+                    ? "template-event-objectives-expanded"
+                    : "template-event-objectives"
+                }
+                className="textarea template-multiline-editor"
+                value={eventObjectivesText}
+                onChange={(event) => setEventObjectivesText(event.target.value)}
+                spellCheck="false"
+              />
+              <p className="mini-note">
+                One objective per line, matching the paper form.
+              </p>
+            </div>
+          </>
+        ) : null}
+
+        {templateKind !== "training_event" ? (
+          <>
+            <div className="field mt-4">
+              <label
+                className="label"
+                htmlFor={
+                  expanded
+                    ? "template-assessment-description-expanded"
+                    : "template-assessment-description"
+                }
+              >
+                Competency assessment description
+              </label>
+              <textarea
+                id={
+                  expanded
+                    ? "template-assessment-description-expanded"
+                    : "template-assessment-description"
+                }
+                className="textarea"
+                value={assessmentDescription}
+                onChange={(event) => setAssessmentDescription(event.target.value)}
+              />
+            </div>
+
+            <div className="field mt-4">
+              <label
+                className="label"
+                htmlFor={
+                  expanded
+                    ? "template-assessment-objectives-expanded"
+                    : "template-assessment-objectives"
+                }
+              >
+                Competency assessment objectives
+              </label>
+              <textarea
+                id={
+                  expanded
+                    ? "template-assessment-objectives-expanded"
+                    : "template-assessment-objectives"
+                }
+                className="textarea template-multiline-editor"
+                value={assessmentObjectivesText}
+                onChange={(event) =>
+                  setAssessmentObjectivesText(event.target.value)
+                }
+                spellCheck="false"
+              />
+              <p className="mini-note">
+                One objective per line.
+              </p>
+            </div>
+
+            <div className="field mt-4">
+              <label className="label">Competency tasks / methods</label>
+              <div className="template-task-list">
+                {competencyTasks.map((task, index) => (
+                  <div className="template-task-row" key={`${index}-${task.method}`}>
+                    <input
+                      className="input"
+                      type="text"
+                      value={task.taskLabel}
+                      onChange={(event) => {
+                        setCompetencyTasks((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? {
+                                  ...item,
+                                  taskLabel: event.target.value,
+                                }
+                              : item
+                          )
+                        );
+                      }}
+                      placeholder="Task label"
+                    />
+                    <input
+                      className="input"
+                      type="text"
+                      value={task.method}
+                      onChange={(event) => {
+                        setCompetencyTasks((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? {
+                                  ...item,
+                                  method: event.target.value,
+                                }
+                              : item
+                          )
+                        );
+                      }}
+                      placeholder="Method"
+                    />
+                    <button
+                      className="button is-light"
+                      type="button"
+                      onClick={() => {
+                        setCompetencyTasks((current) =>
+                          current.length === 1
+                            ? [{ ...defaultCompetencyTask }]
+                            : current.filter((_, itemIndex) => itemIndex !== index)
+                        );
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button
+                className="button is-light mt-3"
+                type="button"
+                onClick={() => {
+                  setCompetencyTasks((current) => [
+                    ...current,
+                    { ...defaultCompetencyTask },
+                  ]);
+                }}
+              >
+                Add competency task
+              </button>
+            </div>
+          </>
+        ) : null}
+
+        <div className="field mt-4">
+          <label
+            className="label"
+            htmlFor={
+              expanded ? "template-references-expanded" : "template-references"
+            }
+          >
+            Related documentation / reference material
+          </label>
+          <textarea
+            id={expanded ? "template-references-expanded" : "template-references"}
+            className="textarea template-multiline-editor"
+            value={referenceDocumentsText}
+            onChange={(event) => setReferenceDocumentsText(event.target.value)}
+            spellCheck="false"
+          />
+          <p className="mini-note">
+            One SOP, policy, form, or reference per line.
+          </p>
+        </div>
+
+        <div className="field mt-4">
+          <label className="label">Signature block</label>
+          <div className="template-signature-list">
+            {defaultSignatureFields.map((field) => (
+              <span className="tag is-light" key={field}>
+                {field.replaceAll("_", " ")}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="field mt-4">
+          <button
+            className="button is-light"
+            type="button"
+            onClick={() => setShowGeneratedSchema((current) => !current)}
+          >
+            {showGeneratedSchema ? "Hide" : "Show"} generated schema preview
+          </button>
+        </div>
+
+        {showGeneratedSchema ? (
+          <div className="field">
+            <label
+              className="label"
+              htmlFor={
+                expanded ? "template-schema-expanded" : "template-schema"
+              }
+            >
+              Generated schema preview
+            </label>
+            <textarea
+              id={expanded ? "template-schema-expanded" : "template-schema"}
+              className={`textarea template-schema-editor ${
+                expanded ? "template-schema-editor-expanded" : ""
+              }`}
+              value={generatedSchemaText}
+              readOnly
+              spellCheck="false"
+            />
+          </div>
+        ) : null}
       </div>
 
       {formMessage ? <p className="mini-note">{formMessage}</p> : null}

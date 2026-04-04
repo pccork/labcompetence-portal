@@ -330,6 +330,34 @@ body {
   font-size: 0.85rem;
 }
 
+.template-form-grid {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.template-multiline-editor {
+  min-height: 140px;
+}
+
+.template-task-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.template-task-row {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(0, 1.8fr) minmax(140px, 0.8fr) auto;
+  align-items: start;
+}
+
+.template-signature-list {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .template-editor-overlay {
   position: fixed;
   inset: 0;
@@ -474,5 +502,10 @@ body {
 
   .record-field-grid {
     margin-bottom: 0;
+  }
+
+  .template-form-grid,
+  .template-task-row {
+    grid-template-columns: 1fr;
   }
 }
