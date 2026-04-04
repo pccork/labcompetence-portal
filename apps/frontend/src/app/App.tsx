@@ -12,6 +12,7 @@ import {
   createUserAccount,
   fetchHospitals,
   fetchLabs,
+  fetchTemplateDetail,
   fetchTemplates,
   fetchTrainingAssignments,
   fetchTrainingRecordDetail,
@@ -147,6 +148,9 @@ export function App() {
         await createTemplate(token, input);
         await loadDashboard(token);
       }}
+      onFetchTemplateDetail={(templateId: number) =>
+        fetchTemplateDetail(token, templateId)
+      }
       onCreateAssignment={async (
         input: CreateTrainingAssignmentInput
       ) => {

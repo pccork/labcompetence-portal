@@ -8,6 +8,7 @@ import {
   HospitalSummary,
   LabSummary,
   TemplateSummary,
+  TemplateDetail,
   TrainingAssignmentSummary,
   TrainingRecordDetail,
   TrainingRecordSummary,
@@ -38,6 +39,9 @@ interface DashboardShellProps {
     staffType: string;
   }) => Promise<void>;
   onCreateTemplate: (input: CreateTemplateInput) => Promise<void>;
+  onFetchTemplateDetail: (
+    templateId: number
+  ) => Promise<{ template: TemplateDetail }>;
   onCreateAssignment: (
     input: CreateTrainingAssignmentInput
   ) => Promise<void>;
@@ -77,6 +81,7 @@ export function DashboardShell({
   onRefresh,
   onCreateUser,
   onCreateTemplate,
+  onFetchTemplateDetail,
   onCreateAssignment,
   onCreateRecord,
   onFetchRecordDetail,
@@ -249,6 +254,7 @@ export function DashboardShell({
                 labs={labs}
                 templates={filteredTemplates}
                 onCreateTemplate={onCreateTemplate}
+                onFetchTemplateDetail={onFetchTemplateDetail}
               />
             </div>
             <div className="column is-6-desktop">
@@ -287,6 +293,7 @@ export function DashboardShell({
             labs={labs}
             templates={filteredTemplates}
             onCreateTemplate={onCreateTemplate}
+            onFetchTemplateDetail={onFetchTemplateDetail}
           />
         ) : null}
 

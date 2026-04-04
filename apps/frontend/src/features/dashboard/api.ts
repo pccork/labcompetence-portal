@@ -44,6 +44,18 @@ export interface TemplateSummary {
   latest_version_number: number | null;
 }
 
+export interface TemplateVersionSummary {
+  id: number;
+  template_id: number;
+  version_number: number;
+  schema_json: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface TemplateDetail extends TemplateSummary {
+  versions: TemplateVersionSummary[];
+}
+
 export interface CreateTemplateInput {
   name: string;
   labId: number;
@@ -187,6 +199,17 @@ export async function createUserAccount(
 
 export async function fetchTemplates(token: string) {
   return apiRequest<{ templates: TemplateSummary[] }>("/templates", {}, token);
+}
+
+export async function fetchTemplateDetail(
+  token: string,
+  templateId: number
+) {
+  return apiRequest<{ template: TemplateDetail }>(
+    `/templates/${templateId}`,
+    {},
+    token
+  );
 }
 
 export async function createTemplate(

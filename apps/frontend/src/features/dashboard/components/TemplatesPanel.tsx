@@ -8,13 +8,18 @@ import {
 import {
   CreateTemplateInput,
   LabSummary,
+  TemplateDetail,
   TemplateSummary,
 } from "../api";
+import { printTemplateReport } from "../../../shared/export/reportExport";
 
 interface TemplatesPanelProps {
   labs: LabSummary[];
   templates: TemplateSummary[];
   onCreateTemplate: (input: CreateTemplateInput) => Promise<void>;
+  onFetchTemplateDetail: (
+    templateId: number
+  ) => Promise<{ template: TemplateDetail }>;
 }
 
 const staffTypeOptions = [
@@ -79,6 +84,7 @@ export function TemplatesPanel({
   labs,
   templates,
   onCreateTemplate,
+  onFetchTemplateDetail,
 }: TemplatesPanelProps) {
   const [labId, setLabId] = useState(() => labs[0]?.id || 1);
   const [name, setName] = useState("FOR-CUH-PAT-2 New Section");
@@ -94,6 +100,7 @@ export function TemplatesPanel({
   const [schemaText, setSchemaText] = useState(defaultSchemaText);
   const [searchTerm, setSearchTerm] = useState("");
   const [formMessage, setFormMessage] = useState<string | null>(null);
+  const [printMessage, setPrintMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -135,6 +142,8 @@ export function TemplatesPanel({
             </div>
             <span className="tag is-info is-light">{labs.length} labs</span>
           </div>
+
+          {printMessage ? <p className="mini-note">{printMessage}</p> : null}
 
           <form
             className="stacked-form"
@@ -359,6 +368,77 @@ export function TemplatesPanel({
                   </div>
 
                   <div className="tag-stack">
+                    <button
+                      className="button is-light is-small"
+                      type="button"
+                      onClick={() => {
+                        setPrintMessage(null);
+
+                        startTransition(() => {
+                          void onFetchTemplateDetail(template.id)
+                            .then((response) => {
+                              const templateDetail = response.template;
+                              const latestVersion =
+                                templateDetail.versions[0] || null;
+
+                              printTemplateReport({
+                                generatedBy: "Lab competence portal",
+                                title: templateDetail.name,
+                                subtitle: `${templateDetail.form_family_reference} · ${templateDetail.department_name} / ${templateDetail.lab_name} · ${templateDetail.lab_hospital_name}`,
+                                details: [
+                                  {
+                                    label: "Template type",
+                                    value: templateDetail.template_kind.replaceAll(
+                                      "_",
+                                      " "
+                                    ),
+                                  },
+                                  {
+                                    label: "Target staff type",
+                                    value:
+                                      templateDetail.target_staff_type.replaceAll(
+                                        "_",
+                                        " "
+                                      ),
+                                  },
+                                  {
+                                    label: "Latest version",
+                                    value:
+                                      latestVersion?.version_number ||
+                                      templateDetail.latest_version_number ||
+                                      1,
+                                  },
+                                  {
+                                    label: "Status",
+                                    value: templateDetail.is_active
+                                      ? "Active"
+                                      : "Inactive",
+                                  },
+                                  {
+                                    label: "Department",
+                                    value:
+                                      templateDetail.department_name,
+                                  },
+                                  {
+                                    label: "Training unit",
+                                    value: templateDetail.lab_name,
+                                  },
+                                ],
+                                schemaJson: latestVersion?.schema_json,
+                              });
+                            })
+                            .catch((error) => {
+                              setPrintMessage(
+                                error instanceof Error
+                                  ? error.message
+                                  : "Unable to print template"
+                              );
+                            });
+                        });
+                      }}
+                    >
+                      Print form
+                    </button>
                     <span className="tag is-link is-light">
                       v{template.latest_version_number || 1}
                     </span>

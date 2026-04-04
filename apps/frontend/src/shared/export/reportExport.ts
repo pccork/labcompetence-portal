@@ -25,6 +25,14 @@ interface PrintableTrainingRecordOptions {
   title: string;
 }
 
+interface PrintableTemplateOptions {
+  details: PrintableTrainingRecordSection[];
+  generatedBy: string;
+  schemaJson?: Record<string, unknown> | undefined;
+  subtitle: string;
+  title: string;
+}
+
 function escapeCsvValue(value: string | number | null | undefined) {
   const normalizedValue = value == null ? "" : String(value);
 
@@ -370,6 +378,149 @@ export function printTrainingRecordReport(
         <section class="detail-grid">${detailCards}</section>
         ${tableSections}
         ${jsonPayload}
+        <script>
+          window.onload = () => {
+            window.print();
+            window.onafterprint = () => window.close();
+          };
+        </script>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+}
+
+export function printTemplateReport(options: PrintableTemplateOptions) {
+  const printWindow = window.open("", "_blank", "noopener,noreferrer");
+
+  if (!printWindow) {
+    window.print();
+    return;
+  }
+
+  const generatedAt = new Date().toLocaleString("en-IE", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+
+  const detailCards = options.details
+    .map(
+      (detail) => `
+        <article class="detail-card">
+          <p class="detail-label">${escapeHtml(detail.label)}</p>
+          <p class="detail-value">${escapeHtml(detail.value)}</p>
+        </article>
+      `
+    )
+    .join("");
+
+  const schemaSection = options.schemaJson
+    ? `<section class="report-section">
+        <h2>Template schema</h2>
+        <pre>${escapeHtml(JSON.stringify(options.schemaJson, null, 2))}</pre>
+      </section>`
+    : "";
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>${escapeHtml(options.title)}</title>
+        <style>
+          body {
+            margin: 32px;
+            color: #102a43;
+            font-family: Avenir Next, Avenir, Nunito Sans, Trebuchet MS, sans-serif;
+          }
+
+          .report-meta,
+          .detail-label {
+            color: #486581;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+          }
+
+          h1 {
+            margin: 0 0 8px;
+            font-size: 30px;
+            letter-spacing: -0.04em;
+          }
+
+          h2 {
+            margin: 0 0 14px;
+            font-size: 18px;
+            letter-spacing: -0.03em;
+          }
+
+          .report-subtitle {
+            margin: 0 0 24px;
+            color: #486581;
+          }
+
+          .detail-grid {
+            display: grid;
+            gap: 14px;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            margin: 28px 0;
+          }
+
+          .detail-card {
+            border: 1px solid #d9e2ec;
+            border-radius: 18px;
+            padding: 14px 16px;
+            background: #f8fafc;
+          }
+
+          .detail-label,
+          .detail-value {
+            margin: 0;
+          }
+
+          .detail-value {
+            margin-top: 8px;
+            font-size: 15px;
+            font-weight: 700;
+            overflow-wrap: anywhere;
+          }
+
+          .report-section {
+            margin-top: 30px;
+            page-break-inside: avoid;
+          }
+
+          pre {
+            margin: 0;
+            padding: 16px;
+            border-radius: 16px;
+            background: #0f172a;
+            color: #e2e8f0;
+            font-size: 12px;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+          }
+
+          @media print {
+            body {
+              margin: 18mm 14mm;
+            }
+
+            .detail-grid {
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="report-meta">
+          Generated ${escapeHtml(generatedAt)} · ${escapeHtml(options.generatedBy)}
+        </div>
+        <h1>${escapeHtml(options.title)}</h1>
+        <p class="report-subtitle">${escapeHtml(options.subtitle)}</p>
+        <section class="detail-grid">${detailCards}</section>
+        ${schemaSection}
         <script>
           window.onload = () => {
             window.print();
