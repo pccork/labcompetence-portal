@@ -39,6 +39,8 @@ interface TemplateDocumentOptions {
 
 const textEncoder = new TextEncoder();
 const crcTable = new Uint32Array(256);
+const documentTextSizeHalfPoints = 20;
+const documentTableWidthTwips = 9300;
 
 for (let index = 0; index < crcTable.length; index += 1) {
   let crc = index;
@@ -222,6 +224,13 @@ function createDetailParagraph(detail: DocumentDetail) {
 }
 
 function createTable(table: DocumentTable) {
+  const columnWidth = Math.max(
+    900,
+    Math.floor(
+      documentTableWidthTwips / Math.max(table.columns.length, 1)
+    )
+  );
+
   const headerRow = `
     <w:tr>
       ${table.columns
@@ -229,7 +238,7 @@ function createTable(table: DocumentTable) {
           (column) => `
             <w:tc>
               <w:tcPr>
-                <w:tcW w:w="2400" w:type="dxa"/>
+                <w:tcW w:w="${columnWidth}" w:type="dxa"/>
                 <w:shd w:fill="D9F0EE"/>
               </w:tcPr>
               ${createParagraph(column, "TableHeader")}
@@ -252,7 +261,7 @@ function createTable(table: DocumentTable) {
             .map(
               (value) => `
                 <w:tc>
-                  <w:tcPr><w:tcW w:w="2400" w:type="dxa"/></w:tcPr>
+                  <w:tcPr><w:tcW w:w="${columnWidth}" w:type="dxa"/></w:tcPr>
                   ${createParagraph(sanitizeParagraphValue(value), "BodyText")}
                 </w:tc>
               `
@@ -267,7 +276,8 @@ function createTable(table: DocumentTable) {
     ${createParagraph(table.title, "Heading1")}
     <w:tbl>
       <w:tblPr>
-        <w:tblW w:w="0" w:type="auto"/>
+        <w:tblW w:w="${documentTableWidthTwips}" w:type="dxa"/>
+        <w:tblLayout w:type="fixed"/>
         <w:tblBorders>
           <w:top w:val="single" w:sz="4" w:color="A8B8C7"/>
           <w:left w:val="single" w:sz="4" w:color="A8B8C7"/>
@@ -278,7 +288,9 @@ function createTable(table: DocumentTable) {
         </w:tblBorders>
       </w:tblPr>
       <w:tblGrid>
-        ${table.columns.map(() => '<w:gridCol w:w="2400"/>').join("")}
+        ${table.columns
+          .map(() => `<w:gridCol w:w="${columnWidth}"/>`)
+          .join("")}
       </w:tblGrid>
       ${headerRow}
       ${bodyRows}
@@ -355,14 +367,14 @@ function buildStylesXml() {
         <w:name w:val="Table Header"/>
         <w:rPr>
           <w:b/>
-          <w:sz w:val="20"/>
+          <w:sz w:val="${documentTextSizeHalfPoints}"/>
           <w:color w:val="0F766E"/>
         </w:rPr>
       </w:style>
       <w:style w:type="paragraph" w:styleId="BodyText">
         <w:name w:val="Body Text"/>
         <w:rPr>
-          <w:sz w:val="22"/>
+          <w:sz w:val="${documentTextSizeHalfPoints}"/>
           <w:color w:val="102A43"/>
         </w:rPr>
       </w:style>
