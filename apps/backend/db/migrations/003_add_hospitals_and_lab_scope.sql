@@ -34,5 +34,14 @@ ALTER COLUMN hospital_id SET NOT NULL;
 ALTER TABLE labs
 DROP CONSTRAINT IF EXISTS labs_name_key;
 
-ALTER TABLE labs
-ADD CONSTRAINT labs_hospital_id_name_key UNIQUE (hospital_id, name);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'labs_hospital_id_name_key'
+  ) THEN
+    ALTER TABLE labs
+    ADD CONSTRAINT labs_hospital_id_name_key UNIQUE (hospital_id, name);
+  END IF;
+END $$;

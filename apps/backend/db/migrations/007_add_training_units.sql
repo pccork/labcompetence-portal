@@ -41,6 +41,17 @@ WHERE t.lab_id = l.id
   AND tu.name = l.name
   AND t.training_unit_id IS NULL;
 
+UPDATE templates t
+SET training_unit_id = (
+  SELECT tu.id
+  FROM training_units tu
+  WHERE tu.lab_id = t.lab_id
+  ORDER BY tu.id ASC
+  LIMIT 1
+)
+WHERE t.training_unit_id IS NULL
+  AND t.lab_id IS NOT NULL;
+
 ALTER TABLE training_assignments
 ADD COLUMN IF NOT EXISTS training_unit_id INTEGER REFERENCES training_units(id) ON DELETE RESTRICT;
 
@@ -51,6 +62,16 @@ INNER JOIN labs l ON l.id = tu.lab_id
 WHERE ta.lab_id = l.id
   AND tu.name = l.name
   AND ta.training_unit_id IS NULL;
+
+UPDATE training_assignments ta
+SET training_unit_id = (
+  SELECT tu.id
+  FROM training_units tu
+  WHERE tu.lab_id = ta.lab_id
+  ORDER BY tu.id ASC
+  LIMIT 1
+)
+WHERE ta.training_unit_id IS NULL;
 
 ALTER TABLE poc_registration_links
 ADD COLUMN IF NOT EXISTS training_unit_id INTEGER REFERENCES training_units(id) ON DELETE CASCADE;
@@ -63,6 +84,16 @@ WHERE prl.lab_id = l.id
   AND tu.name = l.name
   AND prl.training_unit_id IS NULL;
 
+UPDATE poc_registration_links prl
+SET training_unit_id = (
+  SELECT tu.id
+  FROM training_units tu
+  WHERE tu.lab_id = prl.lab_id
+  ORDER BY tu.id ASC
+  LIMIT 1
+)
+WHERE prl.training_unit_id IS NULL;
+
 ALTER TABLE poc_training_requests
 ADD COLUMN IF NOT EXISTS training_unit_id INTEGER REFERENCES training_units(id) ON DELETE CASCADE;
 
@@ -73,6 +104,16 @@ INNER JOIN labs l ON l.id = tu.lab_id
 WHERE ptr.lab_id = l.id
   AND tu.name = l.name
   AND ptr.training_unit_id IS NULL;
+
+UPDATE poc_training_requests ptr
+SET training_unit_id = (
+  SELECT tu.id
+  FROM training_units tu
+  WHERE tu.lab_id = ptr.lab_id
+  ORDER BY tu.id ASC
+  LIMIT 1
+)
+WHERE ptr.training_unit_id IS NULL;
 
 ALTER TABLE templates
 ALTER COLUMN training_unit_id SET NOT NULL;

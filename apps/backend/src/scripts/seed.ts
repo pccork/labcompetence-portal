@@ -468,16 +468,16 @@ async function upsertTrainingRecord(input: {
   if (input.status === AssignmentStatus.SIGNEDOFF) {
     await pool.query(
       `
-      INSERT INTO acknowledgements (training_record_id, user_id)
+      INSERT INTO acknowledgements (training_record_id, trainer_id)
       SELECT $1, $2
       WHERE NOT EXISTS (
         SELECT 1
         FROM acknowledgements
         WHERE training_record_id = $1
-          AND user_id = $2
+          AND trainer_id = $2
       )
       `,
-      [recordId, input.traineeId]
+      [recordId, input.assignedTrainerId]
     );
   }
 
