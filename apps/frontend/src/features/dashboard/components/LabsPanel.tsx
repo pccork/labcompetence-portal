@@ -43,6 +43,7 @@ export function LabsPanel({
               type="button"
             >
               <strong>{lab.name}</strong>
+              <small>{lab.department_name}</small>
               <small>{lab.hospital_name}</small>
               {lab.is_poc ? (
                 <span className="tag is-warning is-light">POC</span>

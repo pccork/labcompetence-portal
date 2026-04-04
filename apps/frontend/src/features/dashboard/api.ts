@@ -19,6 +19,8 @@ export interface UserSummary {
 
 export interface LabSummary {
   id: number;
+  department_id: number;
+  department_name: string;
   hospital_id: number;
   hospital_name: string;
   name: string;
@@ -30,6 +32,8 @@ export interface TemplateSummary {
   name: string;
   lab_id: number;
   lab_name: string;
+  department_id: number;
+  department_name: string;
   lab_hospital_id: number;
   lab_hospital_name: string;
   form_family_reference: string;
@@ -60,6 +64,8 @@ export interface TrainingAssignmentSummary {
   template_name: string;
   lab_id: number;
   lab_name: string;
+  department_id: number;
+  department_name: string;
   lab_hospital_id: number;
   lab_hospital_name: string;
   assigned_by: number | null;
@@ -86,6 +92,8 @@ export interface TrainingRecordSummary {
   version_number: number;
   lab_id: number;
   lab_name: string;
+  department_id: number;
+  department_name: string;
   lab_hospital_id: number;
   lab_hospital_name: string;
   lab_is_poc: boolean;

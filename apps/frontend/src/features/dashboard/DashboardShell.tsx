@@ -92,7 +92,11 @@ export function DashboardShell({
       return "All sections";
     }
 
-    return labs.find((lab) => lab.id === selectedLabId)?.name || "Selected section";
+    const selectedLab = labs.find((lab) => lab.id === selectedLabId);
+
+    return selectedLab
+      ? `${selectedLab.department_name} / ${selectedLab.name}`
+      : "Selected section";
   }, [labs, selectedLabId]);
 
   const filteredAssignments = useMemo(() => {

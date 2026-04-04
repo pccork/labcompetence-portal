@@ -188,7 +188,8 @@ export function TemplatesPanel({
                 >
                   {labs.map((lab) => (
                     <option key={lab.id} value={lab.id}>
-                      {lab.hospital_name} · {lab.name}
+                      {lab.hospital_name} · {lab.department_name} /{" "}
+                      {lab.name}
                     </option>
                   ))}
                 </select>
@@ -347,7 +348,8 @@ export function TemplatesPanel({
                   <div>
                     <h3 className="list-title">{template.name}</h3>
                     <p className="list-meta">
-                      {template.form_family_reference} · {template.lab_name} ·{" "}
+                      {template.form_family_reference} ·{" "}
+                      {template.department_name} / {template.lab_name} ·{" "}
                       {template.lab_hospital_name}
                     </p>
                     <p className="mini-note">

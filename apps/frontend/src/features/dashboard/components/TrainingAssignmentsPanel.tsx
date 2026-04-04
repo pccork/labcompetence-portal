@@ -123,7 +123,7 @@ export function TrainingAssignmentsPanel({
           return true;
         }
 
-        return `${assignment.template_name} ${assignment.trainee_name} ${assignment.lab_name} ${assignment.trainee_email}`
+        return `${assignment.template_name} ${assignment.trainee_name} ${assignment.department_name} ${assignment.lab_name} ${assignment.trainee_email}`
           .toLowerCase()
           .includes(normalizedSearchTerm);
       })
@@ -139,7 +139,7 @@ export function TrainingAssignmentsPanel({
         assignment.trainee_email,
         assignment.staff_type.replaceAll("_", " "),
         assignment.template_name,
-        assignment.lab_name,
+        `${assignment.department_name} / ${assignment.lab_name}`,
         formatDate(assignment.next_due_at),
         assignment.renewal_interval_months,
         getDaysUntil(assignment.next_due_at),
@@ -233,7 +233,8 @@ export function TrainingAssignmentsPanel({
                 >
                   {compatibleTemplates.map((template) => (
                     <option key={template.id} value={template.id}>
-                      {template.name} · {template.lab_name}
+                      {template.name} · {template.department_name} /{" "}
+                      {template.lab_name}
                     </option>
                   ))}
                 </select>
@@ -366,7 +367,9 @@ export function TrainingAssignmentsPanel({
                     <div>
                       <h3 className="list-title">{assignment.template_name}</h3>
                       <p className="list-meta">
-                        {assignment.trainee_name} · {assignment.lab_name} ·{" "}
+                        {assignment.trainee_name} ·{" "}
+                        {assignment.department_name} /{" "}
+                        {assignment.lab_name} ·{" "}
                         {assignment.staff_type.replaceAll("_", " ")}
                       </p>
                       <p className="mini-note">

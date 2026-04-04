@@ -200,7 +200,7 @@ export function TrainingRecordsPanel({
         record.trainee_email,
         record.trainee_staff_type.replaceAll("_", " "),
         record.template_name,
-        record.lab_name,
+        `${record.department_name} / ${record.lab_name}`,
         formatDate(record.scheduled_at),
         formatDate(record.completed_at),
         formatDate(record.expires_at),
@@ -357,6 +357,7 @@ export function TrainingRecordsPanel({
               </div>
               {selectedTemplate ? (
                 <p className="mini-note">
+                  {selectedTemplate.department_name} /{" "}
                   {selectedTemplate.lab_name} ·{" "}
                   {selectedTemplate.target_staff_type.replaceAll("_", " ")}
                 </p>
@@ -582,7 +583,8 @@ export function TrainingRecordsPanel({
                   <div>
                     <h3 className="list-title">{record.template_name}</h3>
                     <p className="list-meta">
-                      {record.trainee_name} · {record.lab_name} ·{" "}
+                      {record.trainee_name} · {record.department_name} /{" "}
+                      {record.lab_name} ·{" "}
                       {record.trainee_staff_type.replaceAll("_", " ")}
                     </p>
                     <p className="mini-note">
@@ -603,7 +605,7 @@ export function TrainingRecordsPanel({
                           .then(({ record: detail }) => {
                             printTrainingRecordReport({
                               title: detail.template_name,
-                              subtitle: `${detail.form_family_reference} · ${detail.lab_name} · version ${detail.version_number}`,
+                              subtitle: `${detail.form_family_reference} · ${detail.department_name} / ${detail.lab_name} · version ${detail.version_number}`,
                               generatedBy: detail.assigned_trainer_name
                                 ? `Trainer: ${detail.assigned_trainer_name}`
                                 : "Lab Competence Portal",
@@ -629,7 +631,7 @@ export function TrainingRecordsPanel({
                                 },
                                 {
                                   label: "Section",
-                                  value: detail.lab_name,
+                                  value: `${detail.department_name} / ${detail.lab_name}`,
                                 },
                                 {
                                   label: "Status",
