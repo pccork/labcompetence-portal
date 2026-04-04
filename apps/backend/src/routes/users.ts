@@ -14,7 +14,7 @@ import {
   createUser,
   deleteUser,
   findUserById,
-  listUsers,
+  listUsersForRequester,
   updateUser,
   updateUserPassword,
 } from "../services/user-service";
@@ -51,7 +51,11 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole(Role.ADMIN),
+        fastify.requireAnyRole([
+          Role.ADMIN,
+          Role.TRAINER,
+          Role.STAFF,
+        ]),
       ],
     },
     async (request, reply) => {
@@ -64,10 +68,12 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ message: "User not found" });
       }
 
-      const users = await listUsers(
-        fastify.db,
-        resolveScopedHospitalId(scope)
-      );
+      const users = await listUsersForRequester(fastify.db, {
+        hospitalId: resolveScopedHospitalId(scope),
+        requesterId: Number(request.user.id),
+        requesterRole: request.user.role,
+        trainingUnitIds: scope.trainingUnitIds,
+      });
 
       return { users };
     }
@@ -78,7 +84,11 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole(Role.ADMIN),
+        fastify.requireAnyRole([
+          Role.ADMIN,
+          Role.TRAINER,
+          Role.STAFF,
+        ]),
       ],
     },
     async (request, reply) => {
@@ -198,6 +208,15 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       if (!canAccessHospital(scope, user.hospital_id)) {
         return reply.status(403).send({
           message: "You cannot access this user's hospital",
+        });
+      }
+
+      if (
+        request.user.role === Role.STAFF &&
+        Number(request.user.id) !== user.id
+      ) {
+        return reply.status(403).send({
+          message: "You can only access your own profile",
         });
       }
 

@@ -32,7 +32,11 @@ const hospitalRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole(Role.ADMIN),
+        fastify.requireAnyRole([
+          Role.ADMIN,
+          Role.TRAINER,
+          Role.STAFF,
+        ]),
       ],
     },
     async (request, reply) => {
@@ -59,7 +63,11 @@ const hospitalRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole(Role.ADMIN),
+        fastify.requireAnyRole([
+          Role.ADMIN,
+          Role.TRAINER,
+          Role.STAFF,
+        ]),
       ],
     },
     async (request, reply) => {

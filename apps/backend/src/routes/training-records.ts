@@ -62,7 +62,11 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole(Role.ADMIN),
+        fastify.requireAnyRole([
+          Role.ADMIN,
+          Role.TRAINER,
+          Role.STAFF,
+        ]),
       ],
     },
     async (request, reply) => {
@@ -82,7 +86,14 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
         scope.trainingUnitIds
       );
 
-      return { records };
+      return {
+        records:
+          request.user.role === Role.STAFF
+            ? records.filter(
+                (record) => record.trainee_id === Number(request.user.id)
+              )
+            : records,
+      };
     }
   );
 
@@ -91,7 +102,11 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole(Role.ADMIN),
+        fastify.requireAnyRole([
+          Role.ADMIN,
+          Role.TRAINER,
+          Role.STAFF,
+        ]),
       ],
     },
     async (request, reply) => {
@@ -105,6 +120,15 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!record) {
         return reply.status(404).send({ message: "Training record not found" });
+      }
+
+      if (
+        request.user.role === Role.STAFF &&
+        record.trainee_id !== Number(request.user.id)
+      ) {
+        return reply.status(403).send({
+          message: "You can only access your own training records",
+        });
       }
 
       const scope = await getHospitalAccessScope(
@@ -143,7 +167,11 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole(Role.ADMIN),
+        fastify.requireAnyRole([
+          Role.ADMIN,
+          Role.TRAINER,
+          Role.STAFF,
+        ]),
       ],
     },
     async (request, reply) => {
@@ -387,7 +415,11 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole(Role.ADMIN),
+        fastify.requireAnyRole([
+          Role.ADMIN,
+          Role.TRAINER,
+          Role.STAFF,
+        ]),
       ],
     },
     async (request, reply) => {
@@ -414,7 +446,14 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
         scope.trainingUnitIds
       );
 
-      return { records };
+      return {
+        records:
+          request.user.role === Role.STAFF
+            ? records.filter(
+                (record) => record.trainee_id === Number(request.user.id)
+              )
+            : records,
+      };
     }
   );
 };

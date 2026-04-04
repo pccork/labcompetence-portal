@@ -126,6 +126,54 @@ export async function listUsers(db: Pool, hospitalId?: number) {
   return result.rows;
 }
 
+export async function listUsersForRequester(
+  db: Pool,
+  input: {
+    hospitalId?: number | undefined;
+    requesterId: number;
+    requesterRole: Role;
+    trainingUnitIds: number[];
+  }
+) {
+  if (input.requesterRole === Role.STAFF) {
+    const requester = await findUserById(db, input.requesterId);
+    return requester ? [requester] : [];
+  }
+
+  const result = await db.query<SafeUser>(
+    `
+    SELECT DISTINCT
+      u.id,
+      u.hospital_id,
+      h.name AS hospital_name,
+      u.name,
+      u.email,
+      u.role,
+      u.staff_type,
+      u.created_at
+    FROM users u
+    INNER JOIN hospitals h ON h.id = u.hospital_id
+    LEFT JOIN user_training_units utu ON utu.user_id = u.id
+    WHERE ($1::int IS NULL OR u.hospital_id = $1)
+      AND (
+        u.id = $2
+        OR (
+          $3::int[] IS NOT NULL
+          AND utu.training_unit_id = ANY($3::int[])
+        )
+      )
+    ORDER BY h.name ASC, u.name ASC
+    `,
+    [
+      input.hospitalId ?? null,
+      input.requesterId,
+      input.trainingUnitIds.length > 0 ? input.trainingUnitIds : null,
+    ]
+  );
+
+  return result.rows;
+}
+
 export async function updateUser(
   db: Pool,
   id: number,

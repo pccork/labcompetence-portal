@@ -52,7 +52,11 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole(Role.ADMIN),
+        fastify.requireAnyRole([
+          Role.ADMIN,
+          Role.TRAINER,
+          Role.STAFF,
+        ]),
       ],
     },
     async (request, reply) => {
@@ -72,7 +76,15 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
         scope.trainingUnitIds
       );
 
-      return { assignments };
+      return {
+        assignments:
+          request.user.role === Role.STAFF
+            ? assignments.filter(
+                (assignment) =>
+                  assignment.user_id === Number(request.user.id)
+              )
+            : assignments,
+      };
     }
   );
 
@@ -81,7 +93,11 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole(Role.ADMIN),
+        fastify.requireAnyRole([
+          Role.ADMIN,
+          Role.TRAINER,
+          Role.STAFF,
+        ]),
       ],
     },
     async (request, reply) => {
@@ -110,7 +126,15 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
         scope.trainingUnitIds
       );
 
-      return { assignments };
+      return {
+        assignments:
+          request.user.role === Role.STAFF
+            ? assignments.filter(
+                (assignment) =>
+                  assignment.user_id === Number(request.user.id)
+              )
+            : assignments,
+      };
     }
   );
 
