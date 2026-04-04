@@ -23,6 +23,7 @@ import {
   TemplateSummary,
   TrainingAssignmentSummary,
   TrainingRecordSummary,
+  updateTemplate,
   UserSummary,
 } from "../features/dashboard/api";
 import { DashboardShell } from "../features/dashboard/DashboardShell";
@@ -146,6 +147,18 @@ export function App() {
       }}
       onCreateTemplate={async (input: CreateTemplateInput) => {
         await createTemplate(token, input);
+        await loadDashboard(token);
+      }}
+      onArchiveTemplate={async (template) => {
+        await updateTemplate(token, template.id, {
+          name: template.name,
+          labId: template.lab_id,
+          formFamilyReference: template.form_family_reference,
+          templateKind: template.template_kind,
+          targetStaffType: template.target_staff_type,
+          isActive: false,
+          schemaJson: {},
+        });
         await loadDashboard(token);
       }}
       onFetchTemplateDetail={(templateId: number) =>

@@ -17,6 +17,7 @@ interface TemplatesPanelProps {
   labs: LabSummary[];
   templates: TemplateSummary[];
   onCreateTemplate: (input: CreateTemplateInput) => Promise<void>;
+  onArchiveTemplate: (template: TemplateSummary) => Promise<void>;
   onFetchTemplateDetail: (
     templateId: number
   ) => Promise<{ template: TemplateDetail }>;
@@ -84,6 +85,7 @@ export function TemplatesPanel({
   labs,
   templates,
   onCreateTemplate,
+  onArchiveTemplate,
   onFetchTemplateDetail,
 }: TemplatesPanelProps) {
   const [labId, setLabId] = useState(() => labs[0]?.id || 1);
@@ -155,6 +157,19 @@ export function TemplatesPanel({
                 schemaJson = JSON.parse(schemaText) as Record<string, unknown>;
               } catch {
                 setFormMessage("Schema JSON is not valid.");
+                return;
+              }
+
+              const selectedLab = labs.find((lab) => lab.id === labId);
+              const confirmed = window.confirm(
+                `Create template \"${name}\" for ${
+                  selectedLab
+                    ? `${selectedLab.department_name} / ${selectedLab.name}`
+                    : "the selected training unit"
+                }?`
+              );
+
+              if (!confirmed) {
                 return;
               }
 
@@ -368,6 +383,35 @@ export function TemplatesPanel({
                   </div>
 
                   <div className="tag-stack">
+                    {template.is_active ? (
+                      <button
+                        className="button is-danger is-light is-small"
+                        type="button"
+                        onClick={() => {
+                          setPrintMessage(null);
+
+                          const confirmed = window.confirm(
+                            `Archive template \"${template.name}\"? It will stay in the system for record history but stop appearing as an active template.`
+                          );
+
+                          if (!confirmed) {
+                            return;
+                          }
+
+                          startTransition(() => {
+                            void onArchiveTemplate(template).catch((error) => {
+                              setPrintMessage(
+                                error instanceof Error
+                                  ? error.message
+                                  : "Unable to archive template"
+                              );
+                            });
+                          });
+                        }}
+                      >
+                        Archive
+                      </button>
+                    ) : null}
                     <button
                       className="button is-light is-small"
                       type="button"

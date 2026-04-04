@@ -39,6 +39,7 @@ interface DashboardShellProps {
     staffType: string;
   }) => Promise<void>;
   onCreateTemplate: (input: CreateTemplateInput) => Promise<void>;
+  onArchiveTemplate: (template: TemplateSummary) => Promise<void>;
   onFetchTemplateDetail: (
     templateId: number
   ) => Promise<{ template: TemplateDetail }>;
@@ -81,6 +82,7 @@ export function DashboardShell({
   onRefresh,
   onCreateUser,
   onCreateTemplate,
+  onArchiveTemplate,
   onFetchTemplateDetail,
   onCreateAssignment,
   onCreateRecord,
@@ -254,6 +256,7 @@ export function DashboardShell({
                 labs={labs}
                 templates={filteredTemplates}
                 onCreateTemplate={onCreateTemplate}
+                onArchiveTemplate={onArchiveTemplate}
                 onFetchTemplateDetail={onFetchTemplateDetail}
               />
             </div>
@@ -293,6 +296,7 @@ export function DashboardShell({
             labs={labs}
             templates={filteredTemplates}
             onCreateTemplate={onCreateTemplate}
+            onArchiveTemplate={onArchiveTemplate}
             onFetchTemplateDetail={onFetchTemplateDetail}
           />
         ) : null}

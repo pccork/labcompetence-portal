@@ -226,6 +226,21 @@ export async function createTemplate(
   );
 }
 
+export async function updateTemplate(
+  token: string,
+  templateId: number,
+  input: CreateTemplateInput
+) {
+  return apiRequest<{ template: TemplateSummary }>(
+    `/templates/${templateId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(input),
+    },
+    token
+  );
+}
+
 export async function fetchDueAssignments(token: string, days = 90) {
   return apiRequest<{ assignments: TrainingAssignmentSummary[] }>(
     `/training-assignments/due?days=${days}`,
