@@ -37,6 +37,27 @@ interface TemplateDocumentOptions {
   title: string;
 }
 
+interface TemplateSchemaSection extends Record<string, unknown> {
+  code?: string;
+  description?: string;
+  fields?: string[];
+  objectives?: string[];
+  referenceDocuments?: string[];
+  tasks?: Array<{
+    method?: string;
+    taskLabel?: string;
+  }>;
+  type?: string;
+}
+
+interface TemplateSchemaDocument extends Record<string, unknown> {
+  documentTitle?: string;
+  formFamilyReference?: string;
+  formTitle?: string;
+  sectionName?: string;
+  sections?: TemplateSchemaSection[];
+}
+
 const textEncoder = new TextEncoder();
 const crcTable = new Uint32Array(256);
 const documentTextSizeHalfPoints = 20;
@@ -223,6 +244,134 @@ function createDetailParagraph(detail: DocumentDetail) {
   );
 }
 
+function createSectionHeading(title: string) {
+  return createParagraph(title, "Heading1");
+}
+
+function createLabelValueTable(
+  title: string,
+  rows: Array<[string, string | number | null | undefined]>
+) {
+  return createTable({
+    title,
+    columns: ["Field", "Content"],
+    rows: rows.map(([label, value]) => [label, sanitizeParagraphValue(value)]),
+  });
+}
+
+function formatSignatureFieldName(fieldName: string) {
+  return fieldName
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function isTemplateSchemaDocument(
+  value: Record<string, unknown>
+): value is TemplateSchemaDocument {
+  return Array.isArray(value.sections);
+}
+
+function buildTemplateSchemaXml(schemaJson: Record<string, unknown>) {
+  if (!isTemplateSchemaDocument(schemaJson)) {
+    return `
+      ${createSectionHeading("Template schema")}
+      ${createParagraph(JSON.stringify(schemaJson, null, 2), "BodyText")}
+    `;
+  }
+
+  const sections = schemaJson.sections ?? [];
+
+  const documentHeader = [
+    schemaJson.formTitle
+      ? createParagraph(schemaJson.formTitle, "Heading1")
+      : "",
+    schemaJson.documentTitle
+      ? createParagraph(schemaJson.documentTitle, "BodyText")
+      : "",
+    schemaJson.formFamilyReference || schemaJson.sectionName
+      ? createParagraph(
+          [
+            schemaJson.formFamilyReference,
+            schemaJson.sectionName,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          "BodyText"
+        )
+      : "",
+  ].join("");
+
+  const sectionXml = sections
+    .map((section, index) => {
+      if (section.type === "training_event") {
+        return `
+          ${createLabelValueTable("Training Event", [
+            ["Training event", section.code],
+            ["Description", section.description],
+            [
+              "Objectives",
+              (section.objectives ?? [])
+                .map((objective, objectiveIndex) => `${objectiveIndex + 1}. ${objective}`)
+                .join("\n"),
+            ],
+            [
+              "Related documentation",
+              (section.referenceDocuments ?? []).join("\n"),
+            ],
+          ])}
+        `;
+      }
+
+      if (section.type === "competency_assessment") {
+        return `
+          ${createLabelValueTable("Competency Assessment", [
+            ["Assessment", section.code],
+            ["Description", section.description],
+            [
+              "Objectives",
+              (section.objectives ?? [])
+                .map((objective, objectiveIndex) => `${objectiveIndex + 1}. ${objective}`)
+                .join("\n"),
+            ],
+          ])}
+          ${createTable({
+            title: "Competency tasks / methods",
+            columns: ["Task", "Method"],
+            rows: (section.tasks ?? []).map((task) => [
+              task.taskLabel,
+              task.method,
+            ]),
+          })}
+        `;
+      }
+
+      if (section.type === "signature_block") {
+        return `
+          ${createTable({
+            title: "Signatures and dates",
+            columns: ["Field", "Value"],
+            rows: (section.fields ?? []).map((field) => [
+              formatSignatureFieldName(field),
+              "",
+            ]),
+          })}
+        `;
+      }
+
+      return `
+        ${createSectionHeading(
+          `Additional form section ${index + 1}: ${
+            section.type || "Custom section"
+          }`
+        )}
+        ${createParagraph(JSON.stringify(section, null, 2), "BodyText")}
+      `;
+    })
+    .join("");
+
+  return `${documentHeader}${sectionXml}`;
+}
+
 function createTable(table: DocumentTable) {
   const columnWidth = Math.max(
     900,
@@ -303,6 +452,7 @@ function buildDocumentXml(options: {
   details?: DocumentDetail[];
   jsonPayload?: Record<string, unknown> | undefined;
   subtitle: string;
+  templateSchemaXml?: string;
   tables?: DocumentTable[];
   title: string;
 }) {
@@ -328,6 +478,7 @@ function buildDocumentXml(options: {
         ${createParagraph(options.subtitle, "Subtitle")}
         ${detailsXml}
         ${tablesXml}
+        ${options.templateSchemaXml ?? ""}
         ${jsonXml}
         <w:sectPr>
           <w:pgSz w:w="11906" w:h="16838"/>
@@ -481,7 +632,9 @@ export function downloadTemplateDocument(options: TemplateDocumentOptions) {
       title: options.title,
       subtitle: `${options.subtitle}\nGenerated ${generatedAt} by ${options.generatedBy}`,
       details: options.details,
-      jsonPayload: options.schemaJson,
+      templateSchemaXml: options.schemaJson
+        ? buildTemplateSchemaXml(options.schemaJson)
+        : createParagraph("Template schema not available.", "BodyText"),
     })
   );
 }
