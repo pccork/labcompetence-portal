@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
   password TEXT NOT NULL,
   role TEXT NOT NULL,
   staff_type TEXT NOT NULL DEFAULT 'basic_grade_scientist',
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT NOW()
 );
 

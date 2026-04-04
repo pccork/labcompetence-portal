@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import { CurrentUser, fetchCurrentUser, loginUser } from "../features/auth/api";
 import { LoginPanel } from "../features/auth/LoginPanel";
 import {
+  archiveUserAccount,
   createTrainingAssignment,
   createTrainingRecord,
   createTemplate,
@@ -143,6 +144,10 @@ export function App() {
       }
       onCreateUser={async (input) => {
         await createUserAccount(token, input);
+        await loadDashboard(token);
+      }}
+      onArchiveUser={async (userId: number) => {
+        await archiveUserAccount(token, userId);
         await loadDashboard(token);
       }}
       onCreateTemplate={async (input: CreateTemplateInput) => {

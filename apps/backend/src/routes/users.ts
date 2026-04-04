@@ -11,6 +11,7 @@ import {
 } from "../services/access-policy-service";
 import { findHospitalById } from "../services/hospital-service";
 import {
+  archiveUser,
   createUser,
   deleteUser,
   findUserById,
@@ -39,6 +40,12 @@ interface UserParams {
 interface UpdatePasswordBody {
   Body: {
     password?: string;
+  };
+}
+
+interface ArchiveUserBody {
+  Body: {
+    archive?: boolean;
   };
 }
 
@@ -437,6 +444,68 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         userId,
         password
       );
+
+      return { user };
+    }
+  );
+
+  fastify.patch<UserParams & ArchiveUserBody>(
+    "/users/:id/archive",
+    {
+      preHandler: [
+        fastify.authenticate,
+        fastify.requireRole(Role.ADMIN),
+      ],
+    },
+    async (request, reply) => {
+      const userId = Number(request.params.id);
+
+      if (!Number.isInteger(userId) || userId <= 0) {
+        return reply.status(400).send({ message: "Invalid user id" });
+      }
+
+      if (request.body.archive === false) {
+        return reply.status(400).send({
+          message: "Only archiving is supported by this endpoint",
+        });
+      }
+
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id)
+      );
+
+      if (!scope) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      const existingUser = await findUserById(fastify.db, userId);
+
+      if (!existingUser) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      if (!existingUser.is_active) {
+        return reply.status(200).send({ user: existingUser });
+      }
+
+      if (!canAccessHospital(scope, existingUser.hospital_id)) {
+        return reply.status(403).send({
+          message: "You cannot archive users from this hospital",
+        });
+      }
+
+      if (existingUser.id === Number(request.user.id)) {
+        return reply.status(400).send({
+          message: "You cannot archive your own account",
+        });
+      }
+
+      const user = await archiveUser(fastify.db, userId);
+
+      if (!user) {
+        return reply.status(404).send({ message: "User not found" });
+      }
 
       return { user };
     }

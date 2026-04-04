@@ -40,7 +40,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = Number(request.user.id);
       const user = await findUserById(fastify.db, userId);
 
-      if (!user) {
+      if (!user || !user.is_active) {
         return reply.status(404).send({ message: "User not found" });
       }
 

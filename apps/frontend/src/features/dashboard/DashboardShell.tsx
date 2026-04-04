@@ -38,6 +38,7 @@ interface DashboardShellProps {
     role: string;
     staffType: string;
   }) => Promise<void>;
+  onArchiveUser: (userId: number) => Promise<void>;
   onCreateTemplate: (input: CreateTemplateInput) => Promise<void>;
   onArchiveTemplate: (template: TemplateSummary) => Promise<void>;
   onFetchTemplateDetail: (
@@ -81,6 +82,7 @@ export function DashboardShell({
   records,
   onRefresh,
   onCreateUser,
+  onArchiveUser,
   onCreateTemplate,
   onArchiveTemplate,
   onFetchTemplateDetail,
@@ -285,9 +287,11 @@ export function DashboardShell({
 
         {activeView === "users" ? (
           <UsersPanel
+            currentUser={currentUser}
             hospitals={hospitals}
             users={users}
             onCreateUser={onCreateUser}
+            onArchiveUser={onArchiveUser}
           />
         ) : null}
 

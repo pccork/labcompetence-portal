@@ -6,11 +6,15 @@ import {
 } from "react";
 
 import {
+  CurrentUser,
+} from "../../auth/api";
+import {
   HospitalSummary,
   UserSummary,
 } from "../api";
 
 interface UsersPanelProps {
+  currentUser: CurrentUser;
   hospitals: HospitalSummary[];
   users: UserSummary[];
   onCreateUser: (input: {
@@ -21,6 +25,7 @@ interface UsersPanelProps {
     role: string;
     staffType: string;
   }) => Promise<void>;
+  onArchiveUser: (userId: number) => Promise<void>;
 }
 
 const roleOptions = [
@@ -59,9 +64,11 @@ const directoryModes = [
 type DirectoryMode = (typeof directoryModes)[number]["value"];
 
 export function UsersPanel({
+  currentUser,
   hospitals,
   users,
   onCreateUser,
+  onArchiveUser,
 }: UsersPanelProps) {
   const [hospitalId, setHospitalId] = useState(() => hospitals[0]?.id || 1);
   const [name, setName] = useState("");
@@ -122,6 +129,8 @@ export function UsersPanel({
       })
       .sort((left, right) => left.name.localeCompare(right.name));
   }, [directoryMode, searchTerm, staffTypeFilter, users]);
+
+  const canArchiveUsers = currentUser.role === "admin";
 
   useEffect(() => {
     setStaffTypeFilter("all");
@@ -378,18 +387,56 @@ export function UsersPanel({
                       {user.staff_type.replaceAll("_", " ")}
                     </p>
                   </div>
+                  <div className="tag-stack">
+                    {canArchiveUsers &&
+                    user.id !== currentUser.id &&
+                    user.is_active ? (
+                      <button
+                        className="button is-danger is-light is-small"
+                        type="button"
+                        onClick={() => {
+                          const confirmed = window.confirm(
+                            `Archive user "${user.name}"? They will stop appearing in active user lists and will no longer be able to sign in.`
+                          );
 
-                  <span
-                    className={`tag ${
-                      user.role === "admin"
-                        ? "is-danger"
-                        : user.role === "trainer"
-                          ? "is-warning"
-                          : "is-link"
-                    } is-light`}
-                  >
-                    {user.role}
-                  </span>
+                          if (!confirmed) {
+                            return;
+                          }
+
+                          startTransition(() => {
+                            void onArchiveUser(user.id)
+                              .then(() => {
+                                setFormMessage(
+                                  `${user.name} archived successfully.`
+                                );
+                              })
+                              .catch((error) => {
+                                setFormMessage(
+                                  error instanceof Error
+                                    ? error.message
+                                    : "Unable to archive user"
+                                );
+                              });
+                          });
+                        }}
+                        disabled={isPending}
+                      >
+                        Archive
+                      </button>
+                    ) : null}
+
+                    <span
+                      className={`tag ${
+                        user.role === "admin"
+                          ? "is-danger"
+                          : user.role === "trainer"
+                            ? "is-warning"
+                            : "is-link"
+                      } is-light`}
+                    >
+                      {user.role}
+                    </span>
+                  </div>
                 </article>
               ))
             )}

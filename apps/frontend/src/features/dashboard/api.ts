@@ -14,6 +14,7 @@ export interface UserSummary {
   email: string;
   role: string;
   staff_type: string;
+  is_active: boolean;
   created_at: string;
 }
 
@@ -192,6 +193,17 @@ export async function createUserAccount(
     {
       method: "POST",
       body: JSON.stringify(input),
+    },
+    token
+  );
+}
+
+export async function archiveUserAccount(token: string, userId: number) {
+  return apiRequest<{ user: UserSummary }>(
+    `/users/${userId}/archive`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ archive: true }),
     },
     token
   );

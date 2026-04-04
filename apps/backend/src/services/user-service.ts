@@ -26,6 +26,7 @@ export interface SafeUser {
   email: string;
   role: Role;
   staff_type: StaffType;
+  is_active: boolean;
   created_at: Date;
 }
 
@@ -49,10 +50,11 @@ export async function createUser(
         email,
         password,
         role,
-        staff_type
+        staff_type,
+        is_active
       )
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, hospital_id, name, email, role, staff_type, created_at
+      VALUES ($1, $2, $3, $4, $5, $6, true)
+      RETURNING id, hospital_id, name, email, role, staff_type, is_active, created_at
     )
     SELECT
       inserted_user.id,
@@ -62,6 +64,7 @@ export async function createUser(
       inserted_user.email,
       inserted_user.role,
       inserted_user.staff_type,
+      inserted_user.is_active,
       inserted_user.created_at
     FROM inserted_user
     INNER JOIN hospitals h ON h.id = inserted_user.hospital_id
@@ -74,7 +77,7 @@ export async function createUser(
 
 export async function findUserByEmail(db: Pool, email: string) {
   const result = await db.query(
-    "SELECT * FROM users WHERE email = $1",
+    "SELECT * FROM users WHERE email = $1 AND is_active = true",
     [email]
   );
 
@@ -92,6 +95,7 @@ export async function findUserById(db: Pool, id: number) {
       u.email,
       u.role,
       u.staff_type,
+      u.is_active,
       u.created_at
     FROM users u
     INNER JOIN hospitals h ON h.id = u.hospital_id
@@ -114,10 +118,12 @@ export async function listUsers(db: Pool, hospitalId?: number) {
       u.email,
       u.role,
       u.staff_type,
+      u.is_active,
       u.created_at
     FROM users u
     INNER JOIN hospitals h ON h.id = u.hospital_id
     WHERE ($1::int IS NULL OR u.hospital_id = $1)
+      AND u.is_active = true
     ORDER BY h.name ASC, u.name ASC
     `,
     [hospitalId ?? null]
@@ -150,11 +156,13 @@ export async function listUsersForRequester(
       u.email,
       u.role,
       u.staff_type,
+      u.is_active,
       u.created_at
     FROM users u
     INNER JOIN hospitals h ON h.id = u.hospital_id
     LEFT JOIN user_training_units utu ON utu.user_id = u.id
     WHERE ($1::int IS NULL OR u.hospital_id = $1)
+      AND u.is_active = true
       AND (
         u.id = $2
         OR (
@@ -194,7 +202,7 @@ export async function updateUser(
         role = $5,
         staff_type = $6
       WHERE id = $1
-      RETURNING id, hospital_id, name, email, role, staff_type, created_at
+      RETURNING id, hospital_id, name, email, role, staff_type, is_active, created_at
     )
     SELECT
       updated_user.id,
@@ -204,6 +212,7 @@ export async function updateUser(
       updated_user.email,
       updated_user.role,
       updated_user.staff_type,
+      updated_user.is_active,
       updated_user.created_at
     FROM updated_user
     INNER JOIN hospitals h ON h.id = updated_user.hospital_id
@@ -240,6 +249,34 @@ export async function deleteUser(db: Pool, id: number) {
   return result.rows[0];
 }
 
+export async function archiveUser(db: Pool, id: number) {
+  const result = await db.query<SafeUser>(
+    `
+    WITH archived_user AS (
+      UPDATE users
+      SET is_active = false
+      WHERE id = $1
+      RETURNING id, hospital_id, name, email, role, staff_type, is_active, created_at
+    )
+    SELECT
+      archived_user.id,
+      archived_user.hospital_id,
+      h.name AS hospital_name,
+      archived_user.name,
+      archived_user.email,
+      archived_user.role,
+      archived_user.staff_type,
+      archived_user.is_active,
+      archived_user.created_at
+    FROM archived_user
+    INNER JOIN hospitals h ON h.id = archived_user.hospital_id
+    `,
+    [id]
+  );
+
+  return result.rows[0];
+}
+
 export async function updateUserPassword(
   db: Pool,
   id: number,
@@ -253,7 +290,7 @@ export async function updateUserPassword(
       UPDATE users
       SET password = $2
       WHERE id = $1
-      RETURNING id, hospital_id, name, email, role, staff_type, created_at
+      RETURNING id, hospital_id, name, email, role, staff_type, is_active, created_at
     )
     SELECT
       updated_user.id,
@@ -263,6 +300,7 @@ export async function updateUserPassword(
       updated_user.email,
       updated_user.role,
       updated_user.staff_type,
+      updated_user.is_active,
       updated_user.created_at
     FROM updated_user
     INNER JOIN hospitals h ON h.id = updated_user.hospital_id
