@@ -7,7 +7,7 @@
     "build": "tsc"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "pccork",
+  "license": "MIT",
   "packageManager": "pnpm@10.30.0"
 }

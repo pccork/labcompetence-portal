@@ -1,6 +1,8 @@
 {
   "name": "frontend",
   "version": "1.0.0",
+  "author": "pccork",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "scripts": {
