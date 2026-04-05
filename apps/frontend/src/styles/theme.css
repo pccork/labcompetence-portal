@@ -697,6 +697,106 @@ body {
   justify-content: flex-end;
 }
 
+.request-filter-grid {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 1rem;
+}
+
+.poct-group-card,
+.poct-link-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.poct-group-header {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.poct-chip-grid {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.poct-request-chip {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff, #f8fbfc);
+  color: var(--portal-ink);
+  cursor: pointer;
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.9rem 1rem;
+  text-align: left;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.poct-request-chip strong {
+  font-size: 0.96rem;
+  font-weight: 800;
+}
+
+.poct-request-chip span {
+  color: var(--portal-slate);
+  font-size: 0.82rem;
+}
+
+.poct-request-chip.is-selected {
+  border-color: rgba(15, 118, 110, 0.55);
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.poct-link-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  max-height: none;
+}
+
+.poct-link-card {
+  border: 1px solid rgba(15, 118, 110, 0.14);
+  border-radius: 24px;
+  padding: 1rem;
+  background: linear-gradient(180deg, #ffffff, #f4fbfa);
+}
+
+.poct-qr-preview,
+.poct-qr-skeleton {
+  width: 220px;
+  height: 220px;
+  border-radius: 18px;
+  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.poct-qr-preview {
+  display: block;
+  object-fit: contain;
+  padding: 0.75rem;
+}
+
+.poct-qr-skeleton {
+  animation: pulse-soft 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
 .button.is-link {
   background: linear-gradient(135deg, var(--portal-sea), var(--portal-leaf));
 }
@@ -741,7 +841,8 @@ body {
   .poct-hero-layout,
   .poct-hero-badges,
   .poct-stat-row,
-  .poc-register-layout {
+  .poc-register-layout,
+  .request-filter-grid {
     grid-template-columns: 1fr;
   }
 
@@ -767,5 +868,16 @@ body {
   .template-form-grid,
   .template-task-row {
     grid-template-columns: 1fr;
+  }
+
+  .poct-group-header {
+    flex-direction: column;
+  }
+
+  .poct-qr-preview,
+  .poct-qr-skeleton {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
   }
 }

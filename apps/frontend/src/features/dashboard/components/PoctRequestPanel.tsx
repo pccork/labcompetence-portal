@@ -1,3 +1,4 @@
+import QRCode from "qrcode";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
 import { CurrentUser } from "../../auth/api";
@@ -23,6 +24,16 @@ interface PoctRequestPanelProps {
   ) => Promise<void>;
 }
 
+interface RequestGroup {
+  deviceName: string;
+  hospitalName: string;
+  key: string;
+  latestRequestedAt: string;
+  locationName: string;
+  requests: PocTrainingRequestSummary[];
+  status: string;
+}
+
 function formatDateTime(value: string | null) {
   if (!value) {
     return "Not set";
@@ -36,6 +47,108 @@ function formatDateTime(value: string | null) {
 
 function buildRegistrationUrl(code: string) {
   return `${window.location.origin}/poc/register/${code}`;
+}
+
+function buildGroupKey(request: PocTrainingRequestSummary) {
+  return [
+    request.trainee_hospital_name,
+    request.lab_name,
+    request.training_location || "Location not set",
+    request.trainer_reply_status,
+  ].join("::");
+}
+
+function printRegistrationLabel(url: string, title: string) {
+  const printWindow = window.open("", "_blank", "width=760,height=960");
+
+  if (!printWindow) {
+    window.alert("Unable to open print window.");
+    return;
+  }
+
+  printWindow.document.write(`
+    <html>
+      <head>
+        <title>${title}</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            padding: 24px;
+            color: #102a43;
+          }
+          h1 {
+            margin-bottom: 12px;
+          }
+          p {
+            font-size: 14px;
+            line-height: 1.5;
+          }
+          .qr {
+            margin: 24px 0;
+          }
+          img {
+            width: 280px;
+            height: 280px;
+          }
+          .url {
+            padding: 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            word-break: break-all;
+            background: #f8fafc;
+          }
+        </style>
+      </head>
+      <body>
+        <h1>${title}</h1>
+        <p>Scan this QR code to submit a POCT training request.</p>
+        <div class="qr"><img alt="QR code" src="${url}" /></div>
+        <div class="url">${url}</div>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  window.setTimeout(() => {
+    printWindow.print();
+  }, 250);
+}
+
+function QrPreview({
+  className,
+  value,
+}: {
+  className?: string;
+  value: string;
+}) {
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void QRCode.toDataURL(value, {
+      width: 220,
+      margin: 1,
+      color: {
+        dark: "#102a43",
+        light: "#ffffff",
+      },
+    }).then((url: string) => {
+      if (!cancelled) {
+        setDataUrl(url);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [value]);
+
+  if (!dataUrl) {
+    return <div className={`poct-qr-skeleton ${className || ""}`} />;
+  }
+
+  return <img className={className} src={dataUrl} alt="Registration QR code" />;
 }
 
 export function PoctRequestPanel({
@@ -54,66 +167,168 @@ export function PoctRequestPanel({
   const [defaultTrainingTimeDetails, setDefaultTrainingTimeDetails] = useState(
     "To be confirmed",
   );
-  const [selectedRequestId, setSelectedRequestId] = useState<number | null>(
-    requests[0]?.id ?? null,
-  );
+  const [selectedRequestIds, setSelectedRequestIds] = useState<number[]>([]);
   const [replyStatus, setReplyStatus] = useState<"scheduled" | "cancelled">(
     "scheduled",
   );
   const [trainingLocation, setTrainingLocation] = useState("A/E reception");
   const [trainingTimeDetails, setTrainingTimeDetails] = useState("");
   const [trainerMessage, setTrainerMessage] = useState("");
+  const [requestStatusFilter, setRequestStatusFilter] = useState("all");
+  const [requestHospitalFilter, setRequestHospitalFilter] = useState("all");
+  const [requestDeviceFilter, setRequestDeviceFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [copiedLinkCode, setCopiedLinkCode] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const groupedRequests = useMemo(() => {
-    const groups = new Map<
-      string,
-      {
-        key: string;
-        label: string;
-        requests: PocTrainingRequestSummary[];
-      }
-    >();
+    const groups = new Map<string, RequestGroup>();
 
     requests.forEach((request) => {
-      const location = request.training_location || "Location not set";
-      const key = [
-        request.trainee_hospital_name,
-        request.lab_name,
-        location,
-      ].join("::");
+      const key = buildGroupKey(request);
 
       if (!groups.has(key)) {
         groups.set(key, {
           key,
-          label: `${request.trainee_hospital_name} · ${request.lab_name} · ${location}`,
+          hospitalName: request.trainee_hospital_name,
+          deviceName: request.lab_name,
+          locationName: request.training_location || "Location not set",
+          status: request.trainer_reply_status,
+          latestRequestedAt: request.requested_at,
           requests: [],
         });
       }
 
-      groups.get(key)?.requests.push(request);
+      const group = groups.get(key);
+
+      if (!group) {
+        return;
+      }
+
+      group.requests.push(request);
+
+      if (
+        new Date(request.requested_at).getTime() >
+        new Date(group.latestRequestedAt).getTime()
+      ) {
+        group.latestRequestedAt = request.requested_at;
+      }
     });
 
-    return Array.from(groups.values());
+    return Array.from(groups.values()).sort(
+      (left, right) =>
+        new Date(right.latestRequestedAt).getTime() -
+        new Date(left.latestRequestedAt).getTime(),
+    );
   }, [requests]);
 
-  const selectedRequest =
-    requests.find((request) => request.id === selectedRequestId) ?? null;
+  const hospitalOptions = useMemo(
+    () =>
+      Array.from(new Set(requests.map((request) => request.trainee_hospital_name))),
+    [requests],
+  );
+
+  const deviceOptions = useMemo(
+    () => Array.from(new Set(requests.map((request) => request.lab_name))),
+    [requests],
+  );
+
+  const filteredGroups = useMemo(() => {
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+
+    return groupedRequests.filter((group) => {
+      if (
+        requestStatusFilter !== "all" &&
+        group.status !== requestStatusFilter
+      ) {
+        return false;
+      }
+
+      if (
+        requestHospitalFilter !== "all" &&
+        group.hospitalName !== requestHospitalFilter
+      ) {
+        return false;
+      }
+
+      if (requestDeviceFilter !== "all" && group.deviceName !== requestDeviceFilter) {
+        return false;
+      }
+
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      return group.requests.some((request) =>
+        [
+          request.trainee_name,
+          request.trainee_email,
+          request.trainee_hospital_name,
+          request.lab_name,
+          request.training_location || "",
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedSearch),
+      );
+    });
+  }, [
+    groupedRequests,
+    requestDeviceFilter,
+    requestHospitalFilter,
+    requestStatusFilter,
+    searchQuery,
+  ]);
+
+  const selectedRequests = useMemo(
+    () =>
+      requests.filter((request) => selectedRequestIds.includes(request.id)),
+    [requests, selectedRequestIds],
+  );
+
+  const primarySelectedRequest = selectedRequests[0] ?? null;
 
   useEffect(() => {
-    if (selectedRequestId && requests.some((request) => request.id === selectedRequestId)) {
+    const validIds = selectedRequestIds.filter((requestId) =>
+      requests.some((request) => request.id === requestId),
+    );
+
+    if (validIds.length === selectedRequestIds.length) {
       return;
     }
 
-    const nextRequest = requests[0] ?? null;
-    setSelectedRequestId(nextRequest?.id ?? null);
-    setTrainingLocation(nextRequest?.training_location || "A/E reception");
-    setTrainingTimeDetails(nextRequest?.training_time_details || "");
-    setTrainerMessage(nextRequest?.trainer_message || "");
-  }, [requests, selectedRequestId]);
+    setSelectedRequestIds(validIds);
+  }, [requests, selectedRequestIds]);
+
+  const toggleRequestSelection = (requestId: number) => {
+    setSelectedRequestIds((currentSelection) =>
+      currentSelection.includes(requestId)
+        ? currentSelection.filter((id) => id !== requestId)
+        : [...currentSelection, requestId],
+    );
+  };
+
+  const selectWholeGroup = (group: RequestGroup) => {
+    const groupIds = group.requests.map((request) => request.id);
+
+    setSelectedRequestIds((currentSelection) => {
+      const hasAll = groupIds.every((id) => currentSelection.includes(id));
+
+      return hasAll
+        ? currentSelection.filter((id) => !groupIds.includes(id))
+        : Array.from(new Set([...currentSelection, ...groupIds]));
+    });
+
+    setTrainingLocation(
+      group.requests[0]?.training_location ||
+        group.locationName ||
+        "A/E reception",
+    );
+    setTrainingTimeDetails(group.requests[0]?.training_time_details || "");
+    setTrainerMessage(group.requests[0]?.trainer_message || "");
+  };
 
   return (
     <section className="columns is-multiline">
@@ -167,7 +382,11 @@ export function PoctRequestPanel({
                 <select
                   id="poct-link-lab"
                   value={labId}
-                  onChange={(event) => setLabId(Number(event.target.value))}
+                  onChange={(event) =>
+                    setLabId(
+                      event.target.value ? Number(event.target.value) : "",
+                    )
+                  }
                 >
                   <option value="">Select a POCT section</option>
                   {poctLabs.map((lab) => (
@@ -240,48 +459,146 @@ export function PoctRequestPanel({
               </h2>
             </div>
             <span className="tag is-primary is-light">
-              {requests.length} requests
+              {filteredGroups.length} groups
             </span>
           </div>
 
-          <div className="scroll-list poct-scroll-list">
-            {groupedRequests.map((group) => (
-              <article key={group.key} className="list-card">
-                <div>
-                  <p className="list-title">{group.label}</p>
-                  <p className="mini-note">
-                    {group.requests.length} request
-                    {group.requests.length === 1 ? "" : "s"} · latest{" "}
-                    {formatDateTime(group.requests[0]?.requested_at ?? null)}
-                  </p>
-                </div>
-                <div className="poct-inline-actions">
-                  {group.requests.slice(0, 3).map((request) => (
-                    <button
-                      key={request.id}
-                      className={`button is-small ${
-                        selectedRequestId === request.id
-                          ? "is-link"
-                          : "is-light"
-                      }`}
-                      type="button"
-                      onClick={() => {
-                        setSelectedRequestId(request.id);
-                        setTrainingLocation(
-                          request.training_location || "A/E reception",
-                        );
-                        setTrainingTimeDetails(
-                          request.training_time_details || "",
-                        );
-                        setTrainerMessage(request.trainer_message || "");
-                      }}
-                    >
-                      {request.trainee_name}
-                    </button>
+          <div className="request-filter-grid">
+            <div className="field">
+              <label className="label" htmlFor="poct-filter-status">
+                Status
+              </label>
+              <div className="select is-fullwidth">
+                <select
+                  id="poct-filter-status"
+                  value={requestStatusFilter}
+                  onChange={(event) => setRequestStatusFilter(event.target.value)}
+                >
+                  <option value="all">All statuses</option>
+                  <option value="pending_trainer_reply">Pending</option>
+                  <option value="scheduled">Scheduled</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="field">
+              <label className="label" htmlFor="poct-filter-hospital">
+                Hospital
+              </label>
+              <div className="select is-fullwidth">
+                <select
+                  id="poct-filter-hospital"
+                  value={requestHospitalFilter}
+                  onChange={(event) =>
+                    setRequestHospitalFilter(event.target.value)
+                  }
+                >
+                  <option value="all">All hospitals</option>
+                  {hospitalOptions.map((hospitalName) => (
+                    <option key={hospitalName} value={hospitalName}>
+                      {hospitalName}
+                    </option>
                   ))}
-                </div>
-              </article>
-            ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="field">
+              <label className="label" htmlFor="poct-filter-device">
+                Device
+              </label>
+              <div className="select is-fullwidth">
+                <select
+                  id="poct-filter-device"
+                  value={requestDeviceFilter}
+                  onChange={(event) => setRequestDeviceFilter(event.target.value)}
+                >
+                  <option value="all">All devices</option>
+                  {deviceOptions.map((deviceName) => (
+                    <option key={deviceName} value={deviceName}>
+                      {deviceName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="field">
+              <label className="label" htmlFor="poct-filter-search">
+                Search
+              </label>
+              <input
+                id="poct-filter-search"
+                className="input"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Name, email, hospital, or location"
+              />
+            </div>
+          </div>
+
+          <div className="scroll-list poct-scroll-list">
+            {filteredGroups.map((group) => {
+              const selectedCount = group.requests.filter((request) =>
+                selectedRequestIds.includes(request.id),
+              ).length;
+
+              return (
+                <article key={group.key} className="list-card poct-group-card">
+                  <div className="poct-group-header">
+                    <div>
+                      <p className="list-title">
+                        {group.hospitalName} · {group.deviceName}
+                      </p>
+                      <p className="mini-note">
+                        {group.locationName} · {group.requests.length} request
+                        {group.requests.length === 1 ? "" : "s"} · latest{" "}
+                        {formatDateTime(group.latestRequestedAt)}
+                      </p>
+                    </div>
+                    <div className="poct-inline-actions">
+                      <span className="tag is-light">{group.status}</span>
+                      <button
+                        className="button is-small is-light"
+                        type="button"
+                        onClick={() => selectWholeGroup(group)}
+                      >
+                        {selectedCount === group.requests.length
+                          ? "Unselect group"
+                          : "Select group"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="poct-chip-grid">
+                    {group.requests.map((request) => {
+                      const isSelected = selectedRequestIds.includes(request.id);
+
+                      return (
+                        <button
+                          key={request.id}
+                          className={`poct-request-chip ${
+                            isSelected ? "is-selected" : ""
+                          }`}
+                          type="button"
+                          onClick={() => toggleRequestSelection(request.id)}
+                        >
+                          <strong>{request.trainee_name}</strong>
+                          <span>{request.trainee_email}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </article>
+              );
+            })}
+
+            {filteredGroups.length === 0 ? (
+              <p className="empty-state">
+                No POCT requests match the current filters.
+              </p>
+            ) : null}
           </div>
         </section>
       </div>
@@ -290,17 +607,18 @@ export function PoctRequestPanel({
         <section className="panel-card">
           <div className="panel-heading-row">
             <div>
-              <p className="panel-kicker">Registration URLs</p>
-              <h2 className="title is-5">Share or print these QR targets</h2>
+              <p className="panel-kicker">QR labels</p>
+              <h2 className="title is-5">Print or share registration QR codes</h2>
             </div>
           </div>
 
-          <div className="scroll-list">
+          <div className="scroll-list poct-link-grid">
             {registrationLinks.map((link) => {
               const url = buildRegistrationUrl(link.code);
 
               return (
-                <article key={link.code} className="list-card">
+                <article key={link.code} className="poct-link-card">
+                  <QrPreview className="poct-qr-preview" value={url} />
                   <div>
                     <p className="list-title">
                       {link.department_name} / {link.lab_name}
@@ -328,10 +646,24 @@ export function PoctRequestPanel({
                     >
                       {copiedLinkCode === link.code ? "Copied" : "Copy link"}
                     </button>
+                    <button
+                      className="button is-small is-link is-light"
+                      type="button"
+                      onClick={() => printRegistrationLabel(url, link.lab_name)}
+                    >
+                      Print label
+                    </button>
                   </div>
                 </article>
               );
             })}
+
+            {registrationLinks.length === 0 ? (
+              <p className="empty-state">
+                Create a registration link to generate a QR code for a POCT
+                device.
+              </p>
+            ) : null}
           </div>
         </section>
       </div>
@@ -340,16 +672,18 @@ export function PoctRequestPanel({
         <section className="panel-card">
           <div className="panel-heading-row">
             <div>
-              <p className="panel-kicker">Schedule request</p>
+              <p className="panel-kicker">Batch scheduler</p>
               <h2 className="title is-5">
-                {selectedRequest
-                  ? `Reply to ${selectedRequest.trainee_name}`
-                  : "Select a request to schedule"}
+                {selectedRequests.length > 0
+                  ? `Reply to ${selectedRequests.length} selected request${
+                      selectedRequests.length === 1 ? "" : "s"
+                    }`
+                  : "Select requests to schedule or cancel"}
               </h2>
             </div>
           </div>
 
-          {selectedRequest ? (
+          {selectedRequests.length > 0 ? (
             <form
               className="stacked-form"
               onSubmit={(event) => {
@@ -358,36 +692,46 @@ export function PoctRequestPanel({
                 setErrorMessage(null);
 
                 startTransition(() => {
-                  void onReplyToRequest(selectedRequest.id, {
-                    trainerReplyStatus: replyStatus,
-                    trainingLocation,
-                    trainingTimeDetails,
-                    trainerMessage,
-                  })
+                  void Promise.all(
+                    selectedRequests.map((request) =>
+                      onReplyToRequest(request.id, {
+                        trainerReplyStatus: replyStatus,
+                        trainingLocation,
+                        trainingTimeDetails,
+                        trainerMessage,
+                      }),
+                    ),
+                  )
                     .then(() => {
                       setMessage(
-                        `Request ${replyStatus}. The trainee email has been queued.`,
+                        `${selectedRequests.length} request${
+                          selectedRequests.length === 1 ? "" : "s"
+                        } updated and email notifications sent.`,
                       );
+                      setSelectedRequestIds([]);
                     })
                     .catch((error) => {
                       setErrorMessage(
                         error instanceof Error
                           ? error.message
-                          : "Unable to update POCT request",
+                          : "Unable to update POCT requests",
                       );
                     });
                 });
               }}
             >
               <div className="poct-request-focus">
-                <p className="list-title">{selectedRequest.trainee_name}</p>
-                <p className="mini-note">
-                  {selectedRequest.trainee_email} ·{" "}
-                  {selectedRequest.trainee_hospital_name}
+                <p className="list-title">
+                  {primarySelectedRequest?.lab_name} ·{" "}
+                  {primarySelectedRequest?.trainee_hospital_name}
                 </p>
                 <p className="mini-note">
-                  {selectedRequest.lab_name} · requested{" "}
-                  {formatDateTime(selectedRequest.requested_at)}
+                  Selected:{" "}
+                  {selectedRequests
+                    .map((request) => request.trainee_name)
+                    .slice(0, 4)
+                    .join(", ")}
+                  {selectedRequests.length > 4 ? " ..." : ""}
                 </p>
               </div>
 
@@ -469,13 +813,13 @@ export function PoctRequestPanel({
                 type="submit"
                 disabled={isPending}
               >
-                Save reply and send email
+                Save replies and send emails
               </button>
             </form>
           ) : (
             <p className="empty-state">
-              New POCT requests will appear here once staff scan a QR link and
-              submit their details.
+              Select one request, a whole group, or multiple requests from the
+              queue to schedule them together.
             </p>
           )}
         </section>
