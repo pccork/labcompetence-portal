@@ -11,10 +11,13 @@ import {
   TrainingAssignmentSummary,
   UserSummary,
 } from "../api";
+import { CurrentUser } from "../../auth/api";
 import { ReportExportActions } from "./ReportExportActions";
 import { downloadListReportDocx } from "../../../shared/export/reportExport";
+import { confirmManagedAction } from "./managementConfirm";
 
 interface TrainingAssignmentsPanelProps {
+  currentUser: CurrentUser;
   assignments: TrainingAssignmentSummary[];
   templates: TemplateSummary[];
   users: UserSummary[];
@@ -44,6 +47,7 @@ function toDueDateIso(value: string) {
 }
 
 export function TrainingAssignmentsPanel({
+  currentUser,
   assignments,
   templates,
   users,
@@ -176,6 +180,23 @@ export function TrainingAssignmentsPanel({
             onSubmit={(event) => {
               event.preventDefault();
               setFormMessage(null);
+
+              const selectedTemplate = compatibleTemplates.find(
+                (template) => template.id === templateId
+              );
+              const confirmed = confirmManagedAction(
+                currentUser,
+                `Create an assignment for "${
+                  selectedUser?.name || "the selected user"
+                }" using "${
+                  selectedTemplate?.name || "the selected template"
+                }"?`,
+                "Please confirm again to create this training assignment."
+              );
+
+              if (!confirmed) {
+                return;
+              }
 
               startTransition(() => {
                 void onCreateAssignment({

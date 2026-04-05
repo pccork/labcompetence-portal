@@ -1,43 +1,17 @@
+interface DashboardMetric {
+  label: string;
+  value: number;
+  helper: string;
+  accent?: boolean;
+}
+
 interface DashboardMetricsProps {
-  labCount: number;
-  activeTemplateCount: number;
-  dueSoonCount: number;
-  activeAssignmentCount: number;
+  metrics: DashboardMetric[];
 }
 
 export function DashboardMetrics({
-  labCount,
-  activeTemplateCount,
-  dueSoonCount,
-  activeAssignmentCount,
+  metrics,
 }: DashboardMetricsProps) {
-  const metrics = [
-    {
-      label: "Labs",
-      value: labCount,
-      helper: "Sections available in your scope",
-      accent: false,
-    },
-    {
-      label: "Templates",
-      value: activeTemplateCount,
-      helper: "Active digital competency forms",
-      accent: false,
-    },
-    {
-      label: "Assignments",
-      value: activeAssignmentCount,
-      helper: "Current section training assignments",
-      accent: false,
-    },
-    {
-      label: "Due < 30 days",
-      value: dueSoonCount,
-      helper: "Needs trainer/co-ordinator follow-up",
-      accent: true,
-    },
-  ];
-
   return (
     <section className="columns is-multiline">
       {metrics.map((metric) => (

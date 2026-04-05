@@ -14,6 +14,7 @@ export interface UserSummary {
   email: string;
   role: string;
   staff_type: string;
+  is_global_admin: boolean;
   is_active: boolean;
   created_at: string;
 }
@@ -165,6 +166,81 @@ export interface CreateTrainingRecordInput {
   status?: string;
 }
 
+export interface CreateHospitalInput {
+  name: string;
+}
+
+export interface CreateLabInput {
+  hospitalId: number;
+  departmentName?: string;
+  name: string;
+  isPoc?: boolean;
+}
+
+export interface PocRegistrationLinkSummary {
+  id: number;
+  code: string;
+  is_active: boolean;
+  default_training_location: string | null;
+  default_training_time_details: string | null;
+  created_at: string;
+  lab_id: number;
+  lab_name: string;
+  department_id: number;
+  department_name: string;
+  lab_is_poc: boolean;
+  hospital_id: number;
+  hospital_name: string;
+}
+
+export interface PocTrainingRequestSummary {
+  id: number;
+  registration_link_id: number;
+  user_id: number | null;
+  trainee_hospital_id: number;
+  trainee_hospital_name: string;
+  trainee_name: string;
+  trainee_email: string;
+  trainee_staff_type: string;
+  lab_id: number;
+  lab_name: string;
+  department_id: number;
+  department_name: string;
+  lab_hospital_id: number;
+  lab_hospital_name: string;
+  lab_is_poc: boolean;
+  is_training_approved: boolean;
+  trainer_reply_status: string;
+  training_location: string | null;
+  training_time_details: string | null;
+  trainer_message: string | null;
+  responded_by: number | null;
+  responder_name: string | null;
+  responded_at: string | null;
+  requested_at: string;
+}
+
+export interface CreatePocRegistrationLinkInput {
+  labId: number;
+  defaultTrainingLocation?: string;
+  defaultTrainingTimeDetails?: string;
+}
+
+export interface ReplyToPocTrainingRequestInput {
+  trainerReplyStatus: "scheduled" | "cancelled";
+  trainingLocation?: string;
+  trainingTimeDetails?: string;
+  trainerMessage?: string;
+}
+
+export interface PocSelfRegistrationInput {
+  hospitalId: number;
+  name: string;
+  email: string;
+  staffType: string;
+  password?: string;
+}
+
 export async function fetchLabs(token: string) {
   return apiRequest<{ labs: LabSummary[] }>("/labs", {}, token);
 }
@@ -173,8 +249,40 @@ export async function fetchHospitals(token: string) {
   return apiRequest<{ hospitals: HospitalSummary[] }>("/hospitals", {}, token);
 }
 
+export async function fetchPublicHospitals() {
+  return apiRequest<{ hospitals: HospitalSummary[] }>("/poc/hospitals");
+}
+
+export async function createHospital(
+  token: string,
+  input: CreateHospitalInput
+) {
+  return apiRequest<{ hospital: HospitalSummary }>(
+    "/hospitals",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token
+  );
+}
+
 export async function fetchUsers(token: string) {
   return apiRequest<{ users: UserSummary[] }>("/users", {}, token);
+}
+
+export async function createLabSection(
+  token: string,
+  input: CreateLabInput
+) {
+  return apiRequest<{ lab: LabSummary }>(
+    "/labs",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token
+  );
 }
 
 export async function createUserAccount(
@@ -310,6 +418,72 @@ export async function createTrainingRecord(
     "/training-records",
     {
       method: "POST",
+      body: JSON.stringify(input),
+    },
+    token
+  );
+}
+
+export async function fetchPocRegistrationLinks(token: string) {
+  return apiRequest<{ registrationLinks: PocRegistrationLinkSummary[] }>(
+    "/poc/registration-links",
+    {},
+    token
+  );
+}
+
+export async function createPocRegistrationLink(
+  token: string,
+  input: CreatePocRegistrationLinkInput
+) {
+  return apiRequest<{ registrationLink: PocRegistrationLinkSummary }>(
+    "/poc/registration-links",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token
+  );
+}
+
+export async function fetchPublicPocRegistrationLink(code: string) {
+  return apiRequest<{ registrationLink: PocRegistrationLinkSummary }>(
+    `/poc/registration-links/${code}`
+  );
+}
+
+export async function registerFromPocLink(
+  code: string,
+  input: PocSelfRegistrationInput
+) {
+  return apiRequest<{
+    registration: {
+      registrationLink: PocRegistrationLinkSummary;
+      trainingRequest: PocTrainingRequestSummary;
+    };
+  }>(`/poc/registration-links/${code}/register`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function fetchPocTrainingRequests(token: string) {
+  return apiRequest<{ requests: PocTrainingRequestSummary[] }>(
+    "/poc/training-requests",
+    {},
+    token
+  );
+}
+
+export async function replyToPocTrainingRequest(
+  token: string,
+  requestId: number,
+  input: ReplyToPocTrainingRequestInput
+) {
+  return apiRequest<{ trainingRequest: PocTrainingRequestSummary }>(
+    `/poc/training-requests/${requestId}/reply`,
+    {
+      method: "PATCH",
       body: JSON.stringify(input),
     },
     token

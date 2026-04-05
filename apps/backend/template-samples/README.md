@@ -18,3 +18,10 @@ Suggested naming examples:
 - `biochemistry-competency-checklist.pdf`
 
 After saving a file here, tell me the filename and I can inspect it from the repo.
+
+If a document contains live or confidential working content, do not keep it in
+this repo. Store it instead under the ignored local-only path:
+
+```bash
+apps/backend/private-seed/
+```

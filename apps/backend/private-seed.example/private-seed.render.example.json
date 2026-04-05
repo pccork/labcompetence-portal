@@ -1,0 +1,83 @@
+{
+  "hospitals": [
+    {
+      "name": "Your Hospital Name"
+    }
+  ],
+  "departments": [
+    {
+      "hospitalName": "Your Hospital Name",
+      "name": "Point of Care",
+      "isPoc": true
+    }
+  ],
+  "trainingUnits": [
+    {
+      "hospitalName": "Your Hospital Name",
+      "departmentName": "Point of Care",
+      "name": "Blood Gas",
+      "isPoc": true
+    }
+  ],
+  "users": [
+    {
+      "hospitalName": "Your Hospital Name",
+      "name": "Real POCT Coordinator Name",
+      "email": "real.coordinator@yourhospital.ie",
+      "password": "set-a-strong-temporary-password",
+      "role": "admin",
+      "staffType": "training_coordinator",
+      "trainingUnitNames": ["Blood Gas"]
+    }
+  ],
+  "templates": [
+    {
+      "hospitalName": "Your Hospital Name",
+      "departmentName": "Point of Care",
+      "trainingUnitName": "Blood Gas",
+      "name": "POCT Blood Gas - Scientist Training and Competency",
+      "createdByEmail": "real.coordinator@yourhospital.ie",
+      "formFamilyReference": "POCT-BLOOD-GAS",
+      "templateKind": "poct_training_competency",
+      "targetStaffType": "poct_scientist",
+      "schemaJson": {
+        "formTitle": "Training and Competency Testing on the Blood Gas Analyser RP500/RL1240",
+        "formFamilyReference": "POCT-BLOOD-GAS",
+        "sectionName": "Blood Gas",
+        "documentTitle": "POCT Scientists",
+        "targetAudience": "POCT Scientists",
+        "sections": [
+          {
+            "type": "overview",
+            "heading": "Replace with your real private schema",
+            "checklistItems": ["Paste the real private template content here."]
+          }
+        ]
+      }
+    },
+    {
+      "hospitalName": "Your Hospital Name",
+      "departmentName": "Point of Care",
+      "trainingUnitName": "Blood Gas",
+      "name": "POCT Blood Gas - Medical/Nursing/Midwifery Training and Competency",
+      "createdByEmail": "real.coordinator@yourhospital.ie",
+      "formFamilyReference": "POCT-BLOOD-GAS",
+      "templateKind": "poct_training_competency",
+      "targetStaffType": "poct_medical_nursing",
+      "schemaJson": {
+        "formTitle": "Training and Competency Testing on the Blood Gas Analyser",
+        "formFamilyReference": "POCT-BLOOD-GAS",
+        "sectionName": "Blood Gas",
+        "documentTitle": "Medical/Nursing/Midwifery Staff",
+        "targetAudience": "Medical/Nursing/Midwifery Staff",
+        "sections": [
+          {
+            "type": "overview",
+            "heading": "Replace with your real private schema",
+            "checklistItems": ["Paste the real private template content here."]
+          }
+        ]
+      }
+    }
+  ]
+}

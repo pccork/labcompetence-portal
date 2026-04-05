@@ -6,6 +6,7 @@ import {
 } from "shared-types";
 
 import { findHospitalById } from "../services/hospital-service";
+import { listHospitals } from "../services/hospital-service";
 import { findLabById } from "../services/lab-service";
 import {
   canAccessHospital,
@@ -78,6 +79,11 @@ const allowedPocSelfRegistrationStaffTypes = new Set<string>([
 ]);
 
 const pocRegistrationRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.get("/poc/hospitals", async () => {
+    const hospitals = await listHospitals(fastify.db);
+    return { hospitals };
+  });
+
   fastify.get(
     "/poc/registration-links",
     {
@@ -282,9 +288,10 @@ const pocRegistrationRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(400).send({ message: "Email is required" });
       }
 
-      if (!password || password.length < 8) {
+      if (password && password.length < 8) {
         return reply.status(400).send({
-          message: "Password must be at least 8 characters long",
+          message:
+            "Password must be at least 8 characters long when provided",
         });
       }
 
@@ -309,8 +316,8 @@ const pocRegistrationRoutes: FastifyPluginAsync = async (fastify) => {
             hospitalId,
             name,
             email,
-            password,
             staffType: staffType as StaffType,
+            ...(password ? { password } : {}),
           }
         );
 
@@ -324,7 +331,8 @@ const pocRegistrationRoutes: FastifyPluginAsync = async (fastify) => {
       } catch (error: any) {
         if (error.code === "23505") {
           return reply.status(409).send({
-            message: "User with this email already exists",
+            message:
+              "A matching user or pending POCT request already exists for this email",
           });
         }
 
@@ -455,6 +463,32 @@ const pocRegistrationRoutes: FastifyPluginAsync = async (fastify) => {
         return reply
           .status(404)
           .send({ message: "POC training request not found" });
+      }
+
+      if (
+        updatedRequest.trainer_reply_status ===
+          PocTrainingRequestStatus.SCHEDULED ||
+        updatedRequest.trainer_reply_status ===
+          PocTrainingRequestStatus.CANCELLED
+      ) {
+        fastify.emailService
+          .sendTrainingRequestReplyEmail({
+            traineeName: updatedRequest.trainee_name,
+            traineeEmail: updatedRequest.trainee_email,
+            deviceName: updatedRequest.lab_name,
+            hospitalName: updatedRequest.lab_hospital_name,
+            location: updatedRequest.training_location,
+            timeDetails: updatedRequest.training_time_details,
+            replyStatus: updatedRequest.trainer_reply_status,
+            replyMessage: updatedRequest.trainer_message,
+            coordinatorName: updatedRequest.responder_name,
+          })
+          .catch((error) => {
+            request.log.error(
+              { err: error, requestId: updatedRequest.id },
+              "Failed to send POCT training reply email",
+            );
+          });
       }
 
       return { trainingRequest: updatedRequest };

@@ -1,8 +1,5 @@
 import { FastifyPluginAsync } from "fastify";
-import {
-  AssignmentStatus,
-  Role,
-} from "shared-types";
+import { AssignmentStatus, Role } from "shared-types";
 
 import {
   canAccessHospital,
@@ -19,6 +16,7 @@ import {
   listTrainingRecords,
   listTrainingRecordsExpiringWithinDays,
 } from "../services/training-record-service";
+import { maybeAutoSyncPrivateSeed } from "../services/private-seed-sync-service";
 
 interface TrainingRecordParams {
   Params: {
@@ -62,17 +60,13 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireAnyRole([
-          Role.ADMIN,
-          Role.TRAINER,
-          Role.STAFF,
-        ]),
+        fastify.requireAnyRole([Role.ADMIN, Role.TRAINER, Role.STAFF]),
       ],
     },
     async (request, reply) => {
       const scope = await getHospitalAccessScope(
         fastify.db,
-        Number(request.user.id)
+        Number(request.user.id),
       );
 
       if (!scope) {
@@ -83,18 +77,18 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.db,
         resolveScopedHospitalId(scope),
         scope.canAccessCrossHospitalPoc,
-        scope.trainingUnitIds
+        scope.trainingUnitIds,
       );
 
       return {
         records:
           request.user.role === Role.STAFF
             ? records.filter(
-                (record) => record.trainee_id === Number(request.user.id)
+                (record) => record.trainee_id === Number(request.user.id),
               )
             : records,
       };
-    }
+    },
   );
 
   fastify.get<TrainingRecordParams>(
@@ -102,18 +96,16 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireAnyRole([
-          Role.ADMIN,
-          Role.TRAINER,
-          Role.STAFF,
-        ]),
+        fastify.requireAnyRole([Role.ADMIN, Role.TRAINER, Role.STAFF]),
       ],
     },
     async (request, reply) => {
       const id = Number(request.params.id);
 
       if (!Number.isInteger(id) || id <= 0) {
-        return reply.status(400).send({ message: "Invalid training record id" });
+        return reply
+          .status(400)
+          .send({ message: "Invalid training record id" });
       }
 
       const record = await findTrainingRecordById(fastify.db, id);
@@ -133,7 +125,7 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
 
       const scope = await getHospitalAccessScope(
         fastify.db,
-        Number(request.user.id)
+        Number(request.user.id),
       );
 
       if (!scope) {
@@ -141,16 +133,12 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       if (
-        !canAccessHospital(
-          scope,
-          record.lab_hospital_id,
-          record.lab_is_poc
-        ) ||
+        !canAccessHospital(scope, record.lab_hospital_id, record.lab_is_poc) ||
         !canAccessTrainingUnit(
           scope,
           record.lab_id,
           record.lab_hospital_id,
-          record.lab_is_poc
+          record.lab_is_poc,
         )
       ) {
         return reply.status(403).send({
@@ -159,7 +147,7 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return { record };
-    }
+    },
   );
 
   fastify.post<CreateTrainingRecordBody>(
@@ -167,11 +155,7 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireAnyRole([
-          Role.ADMIN,
-          Role.TRAINER,
-          Role.STAFF,
-        ]),
+        fastify.requireAnyRole([Role.ADMIN, Role.TRAINER, Role.STAFF]),
       ],
     },
     async (request, reply) => {
@@ -190,14 +174,15 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
       const scheduledAt = request.body.scheduledAt ?? null;
       const completedAt = request.body.completedAt ?? null;
       const traineeSignedAt = request.body.traineeSignedAt ?? null;
-      const assessmentPayloadJson =
-        request.body.assessmentPayloadJson ?? {};
+      const assessmentPayloadJson = request.body.assessmentPayloadJson ?? {};
       const specimens = request.body.specimens ?? [];
       const expiresAt = request.body.expiresAt;
       const status = request.body.status?.trim().toLowerCase();
 
       if (!Number.isInteger(traineeId) || traineeId <= 0) {
-        return reply.status(400).send({ message: "Valid traineeId is required" });
+        return reply
+          .status(400)
+          .send({ message: "Valid traineeId is required" });
       }
 
       if (!Number.isInteger(templateVersionId) || templateVersionId <= 0) {
@@ -227,8 +212,7 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (
         trainingAssignmentId !== null &&
-        (!Number.isInteger(trainingAssignmentId) ||
-          trainingAssignmentId <= 0)
+        (!Number.isInteger(trainingAssignmentId) || trainingAssignmentId <= 0)
       ) {
         return reply
           .status(400)
@@ -266,7 +250,9 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
         ) {
           return reply
             .status(400)
-            .send({ message: "Valid specimen processedAt timestamps are required" });
+            .send({
+              message: "Valid specimen processedAt timestamps are required",
+            });
         }
       }
 
@@ -276,11 +262,10 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ message: "Trainee not found" });
       }
 
-      const templateVersionScope =
-        await findTemplateVersionHospitalScopeById(
-          fastify.db,
-          templateVersionId
-        );
+      const templateVersionScope = await findTemplateVersionHospitalScopeById(
+        fastify.db,
+        templateVersionId,
+      );
 
       if (!templateVersionScope) {
         return reply
@@ -290,7 +275,7 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
 
       const scope = await getHospitalAccessScope(
         fastify.db,
-        Number(request.user.id)
+        Number(request.user.id),
       );
 
       if (!scope) {
@@ -298,10 +283,7 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       if (assignedTrainerId !== null) {
-        const trainer = await findUserById(
-          fastify.db,
-          assignedTrainerId
-        );
+        const trainer = await findUserById(fastify.db, assignedTrainerId);
 
         if (!trainer) {
           return reply.status(404).send({ message: "Trainer not found" });
@@ -318,7 +300,7 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
       if (trainingAssignmentId !== null) {
         const assignment = await findTrainingAssignmentById(
           fastify.db,
-          trainingAssignmentId
+          trainingAssignmentId,
         );
 
         if (!assignment) {
@@ -344,11 +326,12 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
           scope,
           templateVersionScope.lab_id,
           templateVersionScope.hospital_id,
-          templateVersionScope.is_poc
+          templateVersionScope.is_poc,
         )
       ) {
         return reply.status(403).send({
-          message: "You cannot create training records across this hospital boundary",
+          message:
+            "You cannot create training records across this hospital boundary",
         });
       }
 
@@ -357,25 +340,24 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
           fastify.db,
           status
             ? {
-              traineeId,
-              templateVersionId,
-              assignedTrainerId,
-              trainingAssignmentId,
-              scheduledAt,
-              completedAt,
-              traineeSignedAt,
-              assessmentPayloadJson,
-              specimens: specimens.map((specimen) => ({
-                specimenLabel: specimen.specimenLabel!.trim(),
-                specimenType: specimen.specimenType?.trim() || null,
-                analyserReference:
-                  specimen.analyserReference?.trim() || null,
-                processedAt: specimen.processedAt || null,
-                resultSummary: specimen.resultSummary?.trim() || null,
-              })),
-              expiresAt,
-              status: status as AssignmentStatus,
-            }
+                traineeId,
+                templateVersionId,
+                assignedTrainerId,
+                trainingAssignmentId,
+                scheduledAt,
+                completedAt,
+                traineeSignedAt,
+                assessmentPayloadJson,
+                specimens: specimens.map((specimen) => ({
+                  specimenLabel: specimen.specimenLabel!.trim(),
+                  specimenType: specimen.specimenType?.trim() || null,
+                  analyserReference: specimen.analyserReference?.trim() || null,
+                  processedAt: specimen.processedAt || null,
+                  resultSummary: specimen.resultSummary?.trim() || null,
+                })),
+                expiresAt,
+                status: status as AssignmentStatus,
+              }
             : {
                 traineeId,
                 templateVersionId,
@@ -388,14 +370,15 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
                 specimens: specimens.map((specimen) => ({
                   specimenLabel: specimen.specimenLabel!.trim(),
                   specimenType: specimen.specimenType?.trim() || null,
-                  analyserReference:
-                    specimen.analyserReference?.trim() || null,
+                  analyserReference: specimen.analyserReference?.trim() || null,
                   processedAt: specimen.processedAt || null,
                   resultSummary: specimen.resultSummary?.trim() || null,
                 })),
                 expiresAt,
-              }
+              },
         );
+
+        await maybeAutoSyncPrivateSeed(fastify.db);
 
         return reply.status(201).send({ record });
       } catch (error: any) {
@@ -407,7 +390,7 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
 
         throw error;
       }
-    }
+    },
   );
 
   fastify.get<ReminderQuery>(
@@ -415,23 +398,21 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireAnyRole([
-          Role.ADMIN,
-          Role.TRAINER,
-          Role.STAFF,
-        ]),
+        fastify.requireAnyRole([Role.ADMIN, Role.TRAINER, Role.STAFF]),
       ],
     },
     async (request, reply) => {
       const days = Number(request.query.days ?? "30");
 
       if (!Number.isInteger(days) || days <= 0) {
-        return reply.status(400).send({ message: "Valid days query is required" });
+        return reply
+          .status(400)
+          .send({ message: "Valid days query is required" });
       }
 
       const scope = await getHospitalAccessScope(
         fastify.db,
-        Number(request.user.id)
+        Number(request.user.id),
       );
 
       if (!scope) {
@@ -443,18 +424,18 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
         days,
         resolveScopedHospitalId(scope),
         scope.canAccessCrossHospitalPoc,
-        scope.trainingUnitIds
+        scope.trainingUnitIds,
       );
 
       return {
         records:
           request.user.role === Role.STAFF
             ? records.filter(
-                (record) => record.trainee_id === Number(request.user.id)
+                (record) => record.trainee_id === Number(request.user.id),
               )
             : records,
       };
-    }
+    },
   );
 };
 

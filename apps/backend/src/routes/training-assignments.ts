@@ -16,6 +16,7 @@ import {
   listTrainingAssignmentsDueWithinDays,
   updateTrainingAssignment,
 } from "../services/training-assignment-service";
+import { maybeAutoSyncPrivateSeed } from "../services/private-seed-sync-service";
 
 interface CreateTrainingAssignmentBody {
   Body: {
@@ -52,17 +53,13 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireAnyRole([
-          Role.ADMIN,
-          Role.TRAINER,
-          Role.STAFF,
-        ]),
+        fastify.requireAnyRole([Role.ADMIN, Role.TRAINER, Role.STAFF]),
       ],
     },
     async (request, reply) => {
       const scope = await getHospitalAccessScope(
         fastify.db,
-        Number(request.user.id)
+        Number(request.user.id),
       );
 
       if (!scope) {
@@ -73,19 +70,18 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.db,
         resolveScopedHospitalId(scope),
         scope.canAccessCrossHospitalPoc,
-        scope.trainingUnitIds
+        scope.trainingUnitIds,
       );
 
       return {
         assignments:
           request.user.role === Role.STAFF
             ? assignments.filter(
-                (assignment) =>
-                  assignment.user_id === Number(request.user.id)
+                (assignment) => assignment.user_id === Number(request.user.id),
               )
             : assignments,
       };
-    }
+    },
   );
 
   fastify.get<DueQuery>(
@@ -93,11 +89,7 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireAnyRole([
-          Role.ADMIN,
-          Role.TRAINER,
-          Role.STAFF,
-        ]),
+        fastify.requireAnyRole([Role.ADMIN, Role.TRAINER, Role.STAFF]),
       ],
     },
     async (request, reply) => {
@@ -111,7 +103,7 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
 
       const scope = await getHospitalAccessScope(
         fastify.db,
-        Number(request.user.id)
+        Number(request.user.id),
       );
 
       if (!scope) {
@@ -123,34 +115,30 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
         days,
         resolveScopedHospitalId(scope),
         scope.canAccessCrossHospitalPoc,
-        scope.trainingUnitIds
+        scope.trainingUnitIds,
       );
 
       return {
         assignments:
           request.user.role === Role.STAFF
             ? assignments.filter(
-                (assignment) =>
-                  assignment.user_id === Number(request.user.id)
+                (assignment) => assignment.user_id === Number(request.user.id),
               )
             : assignments,
       };
-    }
+    },
   );
 
   fastify.post<CreateTrainingAssignmentBody>(
     "/training-assignments",
     {
-      preHandler: [
-        fastify.authenticate,
-        fastify.requireRole(Role.ADMIN),
-      ],
+      preHandler: [fastify.authenticate, fastify.requireRole(Role.ADMIN)],
     },
     async (request, reply) => {
       const userId = Number(request.body.userId);
       const templateId = Number(request.body.templateId);
       const renewalIntervalMonths = Number(
-        request.body.renewalIntervalMonths ?? 12
+        request.body.renewalIntervalMonths ?? 12,
       );
       const nextDueAt = request.body.nextDueAt;
 
@@ -187,7 +175,7 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
 
       const templateScope = await findTemplateAssignmentScopeByTemplateId(
         fastify.db,
-        templateId
+        templateId,
       );
 
       if (!templateScope) {
@@ -203,7 +191,7 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
 
       const scope = await getHospitalAccessScope(
         fastify.db,
-        Number(request.user.id)
+        Number(request.user.id),
       );
 
       if (!scope) {
@@ -216,7 +204,7 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
           scope,
           templateScope.lab_id,
           templateScope.hospital_id,
-          templateScope.is_poc
+          templateScope.is_poc,
         )
       ) {
         return reply.status(403).send({
@@ -234,6 +222,8 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
           nextDueAt,
         });
 
+        await maybeAutoSyncPrivateSeed(fastify.db);
+
         return reply.status(201).send({ assignment });
       } catch (error: any) {
         if (error.code === "23505") {
@@ -244,22 +234,17 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
 
         throw error;
       }
-    }
+    },
   );
 
   fastify.patch<TrainingAssignmentParams & UpdateTrainingAssignmentBody>(
     "/training-assignments/:id",
     {
-      preHandler: [
-        fastify.authenticate,
-        fastify.requireRole(Role.ADMIN),
-      ],
+      preHandler: [fastify.authenticate, fastify.requireRole(Role.ADMIN)],
     },
     async (request, reply) => {
       const assignmentId = Number(request.params.id);
-      const renewalIntervalMonths = Number(
-        request.body.renewalIntervalMonths
-      );
+      const renewalIntervalMonths = Number(request.body.renewalIntervalMonths);
       const nextDueAt = request.body.nextDueAt;
       const isActive = request.body.isActive;
 
@@ -292,7 +277,7 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
 
       const existingAssignment = await findTrainingAssignmentById(
         fastify.db,
-        assignmentId
+        assignmentId,
       );
 
       if (!existingAssignment) {
@@ -303,7 +288,7 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
 
       const scope = await getHospitalAccessScope(
         fastify.db,
-        Number(request.user.id)
+        Number(request.user.id),
       );
 
       if (!scope) {
@@ -316,7 +301,7 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
           scope,
           existingAssignment.lab_id,
           existingAssignment.lab_hospital_id,
-          existingAssignment.lab_is_poc
+          existingAssignment.lab_is_poc,
         )
       ) {
         return reply.status(403).send({
@@ -330,7 +315,7 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
         assignmentId,
         renewalIntervalMonths,
         nextDueAt,
-        isActive
+        isActive,
       );
 
       if (!assignment) {
@@ -339,8 +324,10 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
           .send({ message: "Training assignment not found" });
       }
 
+      await maybeAutoSyncPrivateSeed(fastify.db);
+
       return { assignment };
-    }
+    },
   );
 };
 

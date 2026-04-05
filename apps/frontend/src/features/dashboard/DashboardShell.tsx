@@ -3,10 +3,15 @@ import { useMemo, useState } from "react";
 import { CurrentUser } from "../auth/api";
 import {
   CreateTrainingAssignmentInput,
+  CreateLabInput,
+  CreatePocRegistrationLinkInput,
   CreateTrainingRecordInput,
   CreateTemplateInput,
   HospitalSummary,
   LabSummary,
+  PocRegistrationLinkSummary,
+  PocTrainingRequestSummary,
+  ReplyToPocTrainingRequestInput,
   TemplateSummary,
   TemplateDetail,
   TrainingAssignmentSummary,
@@ -15,11 +20,21 @@ import {
   UserSummary,
 } from "./api";
 import { DashboardMetrics } from "./components/DashboardMetrics";
+import { GlobalAdminOverviewPanel } from "./components/GlobalAdminOverviewPanel";
 import { LabsPanel } from "./components/LabsPanel";
+import { PoctCoordinatorOverviewPanel } from "./components/PoctCoordinatorOverviewPanel";
+import { PoctRequestPanel } from "./components/PoctRequestPanel";
 import { TemplatesPanel } from "./components/TemplatesPanel";
 import { TrainingAssignmentsPanel } from "./components/TrainingAssignmentsPanel";
 import { TrainingRecordsPanel } from "./components/TrainingRecordsPanel";
+import {
+  buildPoctLabIdSet,
+  isPoctAssignment,
+  isPoctStaffType,
+  isPoctTemplate,
+} from "./components/poctDashboardUtils";
 import { UsersPanel } from "./components/UsersPanel";
+import { getAccountScopeLabel } from "./components/roleLabels";
 
 interface DashboardShellProps {
   currentUser: CurrentUser;
@@ -29,6 +44,8 @@ interface DashboardShellProps {
   templates: TemplateSummary[];
   assignments: TrainingAssignmentSummary[];
   records: TrainingRecordSummary[];
+  registrationLinks: PocRegistrationLinkSummary[];
+  poctRequests: PocTrainingRequestSummary[];
   onRefresh: () => void;
   onCreateUser: (input: {
     hospitalId: number;
@@ -38,34 +55,51 @@ interface DashboardShellProps {
     role: string;
     staffType: string;
   }) => Promise<void>;
+  onCreateHospital: (input: { name: string }) => Promise<void>;
+  onCreateLab: (input: CreateLabInput) => Promise<void>;
   onArchiveUser: (userId: number) => Promise<void>;
   onCreateTemplate: (input: CreateTemplateInput) => Promise<void>;
   onArchiveTemplate: (template: TemplateSummary) => Promise<void>;
   onFetchTemplateDetail: (
-    templateId: number
+    templateId: number,
   ) => Promise<{ template: TemplateDetail }>;
-  onCreateAssignment: (
-    input: CreateTrainingAssignmentInput
-  ) => Promise<void>;
+  onCreateAssignment: (input: CreateTrainingAssignmentInput) => Promise<void>;
   onCreateRecord: (input: CreateTrainingRecordInput) => Promise<void>;
   onFetchRecordDetail: (
-    recordId: number
+    recordId: number,
   ) => Promise<{ record: TrainingRecordDetail }>;
+  onCreatePocRegistrationLink: (
+    input: CreatePocRegistrationLinkInput,
+  ) => Promise<void>;
+  onReplyToPocRequest: (
+    requestId: number,
+    input: ReplyToPocTrainingRequestInput,
+  ) => Promise<void>;
   onSignOut: () => void;
   errorMessage: string | null;
   isLoading: boolean;
 }
 
-const dashboardViews = [
+const standardDashboardViews = [
   { id: "overview", label: "Overview" },
+  { id: "poct-requests", label: "POCT requests" },
   { id: "users", label: "Users" },
   { id: "assignments", label: "Due training" },
   { id: "templates", label: "Templates" },
   { id: "records", label: "Records" },
-  { id: "labs", label: "Sections" },
+  { id: "labs", label: "Section setup" },
 ] as const;
 
-type DashboardView = (typeof dashboardViews)[number]["id"];
+const globalAdminViews = [
+  { id: "overview", label: "Overview" },
+  { id: "users", label: "Users" },
+  { id: "templates", label: "Templates" },
+  { id: "labs", label: "Setup" },
+] as const;
+
+type DashboardView =
+  | (typeof standardDashboardViews)[number]["id"]
+  | (typeof globalAdminViews)[number]["id"];
 
 function getDaysUntil(value: string) {
   const deltaMs = new Date(value).getTime() - Date.now();
@@ -80,8 +114,12 @@ export function DashboardShell({
   templates,
   assignments,
   records,
+  registrationLinks,
+  poctRequests,
   onRefresh,
   onCreateUser,
+  onCreateHospital,
+  onCreateLab,
   onArchiveUser,
   onCreateTemplate,
   onArchiveTemplate,
@@ -89,14 +127,24 @@ export function DashboardShell({
   onCreateAssignment,
   onCreateRecord,
   onFetchRecordDetail,
+  onCreatePocRegistrationLink,
+  onReplyToPocRequest,
   onSignOut,
   errorMessage,
   isLoading,
 }: DashboardShellProps) {
   const [activeView, setActiveView] = useState<DashboardView>("overview");
   const [selectedLabId, setSelectedLabId] = useState<number | "all">("all");
+  const poctLabIds = useMemo(() => buildPoctLabIdSet(labs), [labs]);
+  const isLocalCoordinator =
+    currentUser.role === "admin" && !currentUser.is_global_admin;
+  const hasPoctOnlyScope = labs.length > 0 && labs.every((lab) => lab.is_poc);
 
   const selectedLabName = useMemo(() => {
+    if (currentUser.is_global_admin) {
+      return "All hospitals";
+    }
+
     if (selectedLabId === "all") {
       return "All sections";
     }
@@ -106,7 +154,7 @@ export function DashboardShell({
     return selectedLab
       ? `${selectedLab.department_name} / ${selectedLab.name}`
       : "Selected section";
-  }, [labs, selectedLabId]);
+  }, [currentUser.is_global_admin, labs, selectedLabId]);
 
   const filteredAssignments = useMemo(() => {
     if (selectedLabId === "all") {
@@ -114,7 +162,7 @@ export function DashboardShell({
     }
 
     return assignments.filter(
-      (assignment) => assignment.lab_id === selectedLabId
+      (assignment) => assignment.lab_id === selectedLabId,
     );
   }, [assignments, selectedLabId]);
 
@@ -123,9 +171,7 @@ export function DashboardShell({
       return templates;
     }
 
-    return templates.filter(
-      (template) => template.lab_id === selectedLabId
-    );
+    return templates.filter((template) => template.lab_id === selectedLabId);
   }, [selectedLabId, templates]);
 
   const filteredRecords = useMemo(() => {
@@ -133,23 +179,143 @@ export function DashboardShell({
       return records;
     }
 
-    return records.filter(
-      (record) => record.lab_id === selectedLabId
-    );
+    return records.filter((record) => record.lab_id === selectedLabId);
   }, [records, selectedLabId]);
 
   const dueSoonCount = useMemo(
     () =>
       filteredAssignments.filter(
-        (assignment) => getDaysUntil(assignment.next_due_at) <= 30
+        (assignment) => getDaysUntil(assignment.next_due_at) <= 30,
       ).length,
-    [filteredAssignments]
+    [filteredAssignments],
   );
 
   const activeTemplateCount = useMemo(
     () => filteredTemplates.filter((template) => template.is_active).length,
-    [filteredTemplates]
+    [filteredTemplates],
   );
+
+  const poctAssignments = useMemo(
+    () =>
+      assignments.filter((assignment) =>
+        isPoctAssignment(assignment, poctLabIds),
+      ),
+    [assignments, poctLabIds],
+  );
+
+  const poctActiveTemplateCount = useMemo(
+    () =>
+      templates.filter(
+        (template) =>
+          template.is_active && isPoctTemplate(template, poctLabIds),
+      ).length,
+    [poctLabIds, templates],
+  );
+
+  const poctTraineeCount = useMemo(() => {
+    const poctTraineeIds = new Set<number>();
+
+    users.forEach((user) => {
+      if (user.role !== "admin" && isPoctStaffType(user.staff_type)) {
+        poctTraineeIds.add(user.id);
+      }
+    });
+
+    poctAssignments.forEach((assignment) =>
+      poctTraineeIds.add(assignment.user_id),
+    );
+
+    return poctTraineeIds.size;
+  }, [poctAssignments, users]);
+
+  const poctDueSoonCount = useMemo(
+    () =>
+      poctAssignments.filter(
+        (assignment) => getDaysUntil(assignment.next_due_at) <= 30,
+      ).length,
+    [poctAssignments],
+  );
+  const showPoctCoordinatorDashboard =
+    isLocalCoordinator &&
+    hasPoctOnlyScope &&
+    (poctLabIds.size > 0 || poctAssignments.length > 0 || poctTraineeCount > 0);
+  const dashboardViews = currentUser.is_global_admin
+    ? globalAdminViews
+    : standardDashboardViews.filter((view) =>
+        view.id === "poct-requests" ? showPoctCoordinatorDashboard : true,
+      );
+
+  const dashboardMetrics = currentUser.is_global_admin
+    ? [
+        {
+          label: "Hospitals",
+          value: hospitals.length,
+          helper: "Hospital sites in the system",
+        },
+        {
+          label: "Sections",
+          value: labs.length,
+          helper: "Training sections across all hospitals",
+        },
+        {
+          label: "Users",
+          value: users.length,
+          helper: "Active staff accounts in the portal",
+        },
+        {
+          label: "Admin roles",
+          value: users.filter((user) => user.role === "admin").length,
+          helper: "Global and local admin / coordinator accounts",
+          accent: true,
+        },
+      ]
+    : showPoctCoordinatorDashboard
+      ? [
+          {
+            label: "POCT pathways",
+            value: labs.filter((lab) => lab.is_poc).length,
+            helper: "Point-of-care sections under coordination",
+          },
+          {
+            label: "POCT templates",
+            value: poctActiveTemplateCount,
+            helper: "Active competency forms for POCT workflows",
+          },
+          {
+            label: "POCT trainees",
+            value: poctTraineeCount,
+            helper: "Users actively tracked in the POCT pathway",
+          },
+          {
+            label: "POCT due < 30 days",
+            value: poctDueSoonCount,
+            helper: "Needs trainer or coordinator follow-up",
+            accent: true,
+          },
+        ]
+      : [
+          {
+            label: "Labs",
+            value: labs.length,
+            helper: "Sections available in your scope",
+          },
+          {
+            label: "Templates",
+            value: activeTemplateCount,
+            helper: "Active digital competency forms",
+          },
+          {
+            label: "Assignments",
+            value: filteredAssignments.length,
+            helper: "Current section training assignments",
+          },
+          {
+            label: "Due < 30 days",
+            value: dueSoonCount,
+            helper: "Needs trainer/co-ordinator follow-up",
+            accent: true,
+          },
+        ];
 
   return (
     <div className="portal-layout">
@@ -184,7 +350,8 @@ export function DashboardShell({
           <p className="list-meta">
             {currentUser.hospital_name}
             <br />
-            {currentUser.role} · {currentUser.staff_type.replaceAll("_", " ")}
+            {getAccountScopeLabel(currentUser)} ·{" "}
+            {currentUser.staff_type.replaceAll("_", " ")}
           </p>
           <button className="button is-dark is-fullwidth" onClick={onSignOut}>
             Sign out
@@ -198,16 +365,24 @@ export function DashboardShell({
             <p className="eyebrow">{selectedLabName}</p>
             <h2 className="title is-3 mb-1">
               {activeView === "overview"
-                ? "Service dashboard"
+                ? currentUser.is_global_admin
+                  ? "Global admin dashboard"
+                  : showPoctCoordinatorDashboard
+                    ? "POCT training coordinator dashboard"
+                    : "Service dashboard"
                 : activeView === "assignments"
                   ? "Training due and renewal planning"
-                  : activeView === "users"
+                : activeView === "users"
                     ? "User setup and staff directory"
+                    : activeView === "poct-requests"
+                      ? "POCT training requests and QR links"
                     : activeView === "templates"
                       ? "Digital form templates"
                       : activeView === "records"
                         ? "Completed and in-progress records"
-                        : "Lab section directory"}
+                        : currentUser.is_global_admin
+                          ? "Hospital and section setup"
+                          : "Lab section directory"}
             </h2>
           </div>
 
@@ -223,65 +398,101 @@ export function DashboardShell({
         </header>
 
         {errorMessage ? (
-          <div className="notification is-danger is-light">
-            {errorMessage}
-          </div>
+          <div className="notification is-danger is-light">{errorMessage}</div>
         ) : null}
 
-        <DashboardMetrics
-          labCount={labs.length}
-          activeTemplateCount={activeTemplateCount}
-          dueSoonCount={dueSoonCount}
-          activeAssignmentCount={filteredAssignments.length}
-        />
+        <DashboardMetrics metrics={dashboardMetrics} />
 
         {activeView === "overview" ? (
-          <section className="columns is-multiline">
-            <div className="column is-7-desktop">
-              <TrainingAssignmentsPanel
-                assignments={filteredAssignments}
-                templates={filteredTemplates}
-                users={users}
-                selectedLabName={selectedLabName}
-                onCreateAssignment={onCreateAssignment}
-              />
-            </div>
-            <div className="column is-5-desktop">
-              <LabsPanel
-                labs={labs}
-                selectedLabId={selectedLabId}
-                onSelectLab={setSelectedLabId}
-              />
-            </div>
-            <div className="column is-6-desktop">
-              <TemplatesPanel
-                labs={labs}
-                templates={filteredTemplates}
-                onCreateTemplate={onCreateTemplate}
-                onArchiveTemplate={onArchiveTemplate}
-                onFetchTemplateDetail={onFetchTemplateDetail}
-              />
-            </div>
-            <div className="column is-6-desktop">
-              <TrainingRecordsPanel
-                assignments={filteredAssignments}
-                records={filteredRecords}
-                templates={filteredTemplates}
-                users={users}
-                onCreateRecord={onCreateRecord}
-                onFetchRecordDetail={onFetchRecordDetail}
-              />
-            </div>
-          </section>
+          currentUser.is_global_admin ? (
+            <GlobalAdminOverviewPanel
+              currentUser={currentUser}
+              hospitals={hospitals}
+              labs={labs}
+              users={users}
+              onCreateHospital={onCreateHospital}
+            />
+          ) : (
+            <section className="columns is-multiline">
+              {showPoctCoordinatorDashboard ? (
+                <div className="column is-12">
+                  <PoctCoordinatorOverviewPanel
+                    currentUser={currentUser}
+                    labs={labs}
+                    users={users}
+                    templates={templates}
+                    assignments={assignments}
+                    records={records}
+                    onSelectLab={setSelectedLabId}
+                  />
+                </div>
+              ) : null}
+              <div className="column is-7-desktop">
+                <TrainingAssignmentsPanel
+                  currentUser={currentUser}
+                  assignments={filteredAssignments}
+                  templates={filteredTemplates}
+                  users={users}
+                  selectedLabName={selectedLabName}
+                  onCreateAssignment={onCreateAssignment}
+                />
+              </div>
+              <div className="column is-5-desktop">
+                <LabsPanel
+                  currentUser={currentUser}
+                  hospitals={hospitals}
+                  labs={labs}
+                  selectedLabId={selectedLabId}
+                  onSelectLab={setSelectedLabId}
+                  onCreateLab={onCreateLab}
+                />
+              </div>
+              <div className="column is-6-desktop">
+                <TemplatesPanel
+                  currentUser={currentUser}
+                  labs={labs}
+                  templates={filteredTemplates}
+                  onCreateTemplate={onCreateTemplate}
+                  onArchiveTemplate={onArchiveTemplate}
+                  onFetchTemplateDetail={onFetchTemplateDetail}
+                />
+              </div>
+              <div className="column is-6-desktop">
+                <TrainingRecordsPanel
+                  currentUser={currentUser}
+                  assignments={filteredAssignments}
+                  records={filteredRecords}
+                  templates={filteredTemplates}
+                  users={users}
+                  onCreateRecord={onCreateRecord}
+                  onFetchRecordDetail={onFetchRecordDetail}
+                />
+              </div>
+            </section>
+          )
         ) : null}
 
-        {activeView === "assignments" ? (
+        {!currentUser.is_global_admin && activeView === "assignments" ? (
           <TrainingAssignmentsPanel
+            currentUser={currentUser}
             assignments={filteredAssignments}
             templates={filteredTemplates}
             users={users}
             selectedLabName={selectedLabName}
             onCreateAssignment={onCreateAssignment}
+          />
+        ) : null}
+
+        {!currentUser.is_global_admin &&
+        activeView === "poct-requests" &&
+        showPoctCoordinatorDashboard ? (
+          <PoctRequestPanel
+            currentUser={currentUser}
+            labs={labs}
+            registrationLinks={registrationLinks}
+            requests={poctRequests}
+            onCreateRegistrationLink={onCreatePocRegistrationLink}
+            onReplyToRequest={onReplyToPocRequest}
           />
         ) : null}
 
@@ -295,8 +506,9 @@ export function DashboardShell({
           />
         ) : null}
 
-        {activeView === "templates" ? (
+        {!currentUser.is_global_admin && activeView === "templates" ? (
           <TemplatesPanel
+            currentUser={currentUser}
             labs={labs}
             templates={filteredTemplates}
             onCreateTemplate={onCreateTemplate}
@@ -305,8 +517,21 @@ export function DashboardShell({
           />
         ) : null}
 
-        {activeView === "records" ? (
+        {currentUser.is_global_admin && activeView === "templates" ? (
+          <TemplatesPanel
+            currentUser={currentUser}
+            labs={labs}
+            templates={templates}
+            isReadOnly
+            onCreateTemplate={onCreateTemplate}
+            onArchiveTemplate={onArchiveTemplate}
+            onFetchTemplateDetail={onFetchTemplateDetail}
+          />
+        ) : null}
+
+        {!currentUser.is_global_admin && activeView === "records" ? (
           <TrainingRecordsPanel
+            currentUser={currentUser}
             assignments={filteredAssignments}
             records={filteredRecords}
             templates={filteredTemplates}
@@ -317,11 +542,24 @@ export function DashboardShell({
         ) : null}
 
         {activeView === "labs" ? (
-          <LabsPanel
-            labs={labs}
-            selectedLabId={selectedLabId}
-            onSelectLab={setSelectedLabId}
-          />
+          currentUser.is_global_admin ? (
+            <GlobalAdminOverviewPanel
+              currentUser={currentUser}
+              hospitals={hospitals}
+              labs={labs}
+              users={users}
+              onCreateHospital={onCreateHospital}
+            />
+          ) : (
+            <LabsPanel
+              currentUser={currentUser}
+              hospitals={hospitals}
+              labs={labs}
+              selectedLabId={selectedLabId}
+              onSelectLab={setSelectedLabId}
+              onCreateLab={onCreateLab}
+            />
+          )
         ) : null}
       </main>
     </div>

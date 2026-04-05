@@ -1,0 +1,57 @@
+{
+  "hospitals": [
+    {
+      "name": "Example Hospital"
+    }
+  ],
+  "departments": [
+    {
+      "hospitalName": "Example Hospital",
+      "name": "Point of Care",
+      "isPoc": true
+    }
+  ],
+  "trainingUnits": [
+    {
+      "hospitalName": "Example Hospital",
+      "departmentName": "Point of Care",
+      "name": "Blood Gas",
+      "isPoc": true
+    }
+  ],
+  "users": [
+    {
+      "hospitalName": "Example Hospital",
+      "name": "Local Private Coordinator",
+      "email": "local.private.coordinator@example.test",
+      "password": "change-me",
+      "role": "admin",
+      "staffType": "training_coordinator",
+      "trainingUnitNames": ["Blood Gas"]
+    }
+  ],
+  "templates": [
+    {
+      "hospitalName": "Example Hospital",
+      "departmentName": "Point of Care",
+      "trainingUnitName": "Blood Gas",
+      "name": "Private Blood Gas Local Template",
+      "createdByEmail": "local.private.coordinator@example.test",
+      "formFamilyReference": "PRIVATE-POCT",
+      "templateKind": "poct_training_competency",
+      "targetStaffType": "poct_scientist",
+      "schemaJson": {
+        "formTitle": "Private Local Template",
+        "sections": [
+          {
+            "type": "overview",
+            "heading": "Example Only",
+            "checklistItems": [
+              "Replace this example with your local private content."
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

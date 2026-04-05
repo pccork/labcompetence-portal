@@ -1,11 +1,9 @@
+import fs from "fs";
+import path from "path";
 import bcrypt from "bcrypt";
 import dotenv from "dotenv";
 import { Pool } from "pg";
-import {
-  AssignmentStatus,
-  Role,
-  StaffType,
-} from "shared-types";
+import { AssignmentStatus, Role, StaffType } from "shared-types";
 
 dotenv.config();
 
@@ -14,6 +12,77 @@ const pool = new Pool({
 });
 
 const demoPassword = "password123";
+const privateSeedEnabled = process.env.ENABLE_PRIVATE_SEED === "true";
+const privateSeedFilePath = process.env.PRIVATE_SEED_FILE
+  ? path.resolve(process.env.PRIVATE_SEED_FILE)
+  : path.resolve(__dirname, "../../private-seed/private-seed.json");
+
+interface PrivateSeedFile {
+  hospitals?: Array<{
+    name: string;
+  }>;
+  departments?: Array<{
+    hospitalName: string;
+    name: string;
+    isPoc?: boolean;
+  }>;
+  trainingUnits?: Array<{
+    hospitalName: string;
+    departmentName: string;
+    name: string;
+    isPoc?: boolean;
+  }>;
+  users?: Array<{
+    hospitalName: string;
+    name: string;
+    email: string;
+    password?: string;
+    passwordHash?: string;
+    role: Role;
+    staffType: StaffType;
+    trainingUnitNames?: string[];
+  }>;
+  templates?: Array<{
+    hospitalName: string;
+    departmentName: string;
+    trainingUnitName: string;
+    name: string;
+    createdByEmail: string;
+    formFamilyReference: string;
+    templateKind: string;
+    targetStaffType: StaffType;
+    schemaJson: Record<string, unknown>;
+  }>;
+  assignments?: Array<{
+    traineeEmail: string;
+    templateName: string;
+    trainingUnitName: string;
+    assignedByEmail: string;
+    renewalIntervalMonths: number;
+    nextDueAt: string;
+    isActive?: boolean;
+  }>;
+  records?: Array<{
+    traineeEmail: string;
+    templateName: string;
+    trainingUnitName: string;
+    assignedTrainerEmail?: string | null;
+    trainingAssignmentTemplateName?: string | null;
+    scheduledAt?: string | null;
+    completedAt?: string | null;
+    traineeSignedAt?: string | null;
+    expiresAt: string;
+    status?: AssignmentStatus;
+    assessmentPayloadJson?: Record<string, unknown>;
+    specimens?: Array<{
+      specimenLabel: string;
+      specimenType?: string | null;
+      analyserReference?: string | null;
+      processedAt?: string | null;
+      resultSummary?: string | null;
+    }>;
+  }>;
+}
 
 async function upsertHospital(name: string) {
   const result = await pool.query<{ id: number }>(
@@ -24,7 +93,7 @@ async function upsertHospital(name: string) {
     SET name = EXCLUDED.name
     RETURNING id
     `,
-    [name]
+    [name],
   );
 
   const hospitalId = result.rows[0]?.id;
@@ -71,7 +140,7 @@ async function upsertUser(input: {
       input.passwordHash,
       input.role,
       input.staffType,
-    ]
+    ],
   );
 
   const userId = result.rows[0]?.id;
@@ -96,11 +165,7 @@ async function upsertDepartment(input: {
     SET is_poc = EXCLUDED.is_poc
     RETURNING id
     `,
-    [
-      input.hospitalId,
-      input.name,
-      input.isPoc,
-    ]
+    [input.hospitalId, input.name, input.isPoc],
   );
 
   const departmentId = result.rows[0]?.id;
@@ -124,7 +189,7 @@ async function upsertTrainingUnit(input: {
     SET name = EXCLUDED.name
     RETURNING id
     `,
-    [input.departmentId, input.name]
+    [input.departmentId, input.name],
   );
 
   const trainingUnitId = result.rows[0]?.id;
@@ -143,7 +208,7 @@ async function assignUserToLab(userId: number, labId: number) {
     VALUES ($1, $2)
     ON CONFLICT (user_id, training_unit_id) DO NOTHING
     `,
-    [userId, labId]
+    [userId, labId],
   );
 }
 
@@ -166,11 +231,7 @@ async function upsertTemplateWithVersion(input: {
     ORDER BY id ASC
     LIMIT 1
     `,
-    [
-      input.labId,
-      input.name,
-      input.targetStaffType,
-    ]
+    [input.labId, input.name, input.targetStaffType],
   );
 
   const existingTemplateId = existingTemplateResult.rows[0]?.id;
@@ -208,7 +269,7 @@ async function upsertTemplateWithVersion(input: {
             input.formFamilyReference,
             input.templateKind,
             input.targetStaffType,
-          ]
+          ],
         )
       ).rows[0]?.id;
 
@@ -238,7 +299,7 @@ async function upsertTemplateWithVersion(input: {
       input.formFamilyReference,
       input.templateKind,
       input.targetStaffType,
-    ]
+    ],
   );
 
   const versionResult = await pool.query<{ id: number }>(
@@ -253,7 +314,7 @@ async function upsertTemplateWithVersion(input: {
     SET schema_json = EXCLUDED.schema_json
     RETURNING id
     `,
-    [templateId, input.schemaJson]
+    [templateId, input.schemaJson],
   );
 
   const templateVersionId = versionResult.rows[0]?.id;
@@ -316,14 +377,14 @@ async function upsertTrainingAssignment(input: {
       input.assignedBy,
       input.renewalIntervalMonths,
       input.nextDueAt,
-    ]
+    ],
   );
 
   const assignmentId = result.rows[0]?.id;
 
   if (!assignmentId) {
     throw new Error(
-      `Failed to seed assignment for template ${input.templateId}`
+      `Failed to seed assignment for template ${input.templateId}`,
     );
   }
 
@@ -333,8 +394,8 @@ async function upsertTrainingAssignment(input: {
 async function upsertTrainingRecord(input: {
   traineeId: number;
   templateVersionId: number;
-  assignedTrainerId: number;
-  trainingAssignmentId: number;
+  assignedTrainerId: number | null;
+  trainingAssignmentId: number | null;
   scheduledAt: string;
   completedAt: string | null;
   traineeSignedAt: string | null;
@@ -355,15 +416,11 @@ async function upsertTrainingRecord(input: {
     FROM training_records
     WHERE user_id = $1
       AND template_version_id = $2
-      AND training_assignment_id = $3
+      AND training_assignment_id IS NOT DISTINCT FROM $3
     ORDER BY id ASC
     LIMIT 1
     `,
-    [
-      input.traineeId,
-      input.templateVersionId,
-      input.trainingAssignmentId,
-    ]
+    [input.traineeId, input.templateVersionId, input.trainingAssignmentId],
   );
 
   const existingRecordId = existingRecordResult.rows[0]?.id;
@@ -399,7 +456,7 @@ async function upsertTrainingRecord(input: {
             input.assessmentPayloadJson,
             input.expiresAt,
             input.status,
-          ]
+          ],
         )
       ).rows[0]?.id;
 
@@ -430,7 +487,7 @@ async function upsertTrainingRecord(input: {
       input.assessmentPayloadJson,
       input.expiresAt,
       input.status,
-    ]
+    ],
   );
 
   await pool.query(
@@ -438,7 +495,7 @@ async function upsertTrainingRecord(input: {
     DELETE FROM training_record_specimens
     WHERE training_record_id = $1
     `,
-    [recordId]
+    [recordId],
   );
 
   for (const specimen of input.specimens) {
@@ -461,11 +518,15 @@ async function upsertTrainingRecord(input: {
         specimen.analyserReference,
         specimen.processedAt,
         specimen.resultSummary,
-      ]
+      ],
     );
   }
 
   if (input.status === AssignmentStatus.SIGNEDOFF) {
+    if (input.assignedTrainerId === null) {
+      return recordId;
+    }
+
     await pool.query(
       `
       INSERT INTO acknowledgements (training_record_id, trainer_id)
@@ -477,7 +538,7 @@ async function upsertTrainingRecord(input: {
           AND trainer_id = $2
       )
       `,
-      [recordId, input.assignedTrainerId]
+      [recordId, input.assignedTrainerId],
     );
   }
 
@@ -551,6 +612,360 @@ function buildForCuhPat2TemplateSchema(input: {
   };
 }
 
+function buildPoctBloodGasTemplateSchema(input: {
+  title: string;
+  targetAudience: string;
+  maintenanceTasks: string[];
+  references?: string[];
+}) {
+  return {
+    formTitle: "POCT Blood Gas Training and Competency Testing",
+    formFamilyReference: "POCT-BLOOD-GAS",
+    sectionName: "Blood Gas",
+    documentTitle: input.title,
+    targetAudience: input.targetAudience,
+    sections: [
+      {
+        type: "overview",
+        heading: "General Overview",
+        checklistItems: [
+          "Acknowledge SOP for Blood Gas Analysis / analyser operation on Q-Pulse and the staff directory.",
+          "Aware of ISO 22870, QMS expectations, audit/non-conformances/CAPAs, and support from the POCT operational team.",
+          "Identify key analyser components including touchscreen, printer, barcode scanner, reagents, and waste module.",
+          "Recognise ready state and when calibration or QC failure prevents patient testing.",
+        ],
+      },
+      {
+        type: "pre_analytics",
+        heading: "Pre-Analytics",
+        checklistItems: [
+          "Prepare syringe or capillary sample correctly for analysis.",
+          "Describe potential errors caused by incorrect mixing, mislabelling, or delay before analysis.",
+        ],
+      },
+      {
+        type: "analysis",
+        heading: "Analysis and Data Entry",
+        checklistItems: [
+          "Analyse a syringe or capillary sample correctly on the blood gas analyser.",
+          "Enter password, patient demographics, and retrieve/print results safely.",
+          "Maintain confidentiality and secure handling of printed patient results.",
+        ],
+      },
+      {
+        type: "post_analytics",
+        heading: "Post-Analytical, Clinical Utility and Limitations",
+        checklistItems: [
+          "Recognise abnormal or critical results and the need for urgent communication.",
+          "Understand differences between POCT and central laboratory results for parameters such as potassium and haemoglobin.",
+          "Know when confirmatory laboratory analysis is required before treatment or when the result does not fit the clinical picture.",
+          "Understand analyser interferences, technical limitations, and common error messages.",
+        ],
+      },
+      {
+        type: "maintenance",
+        heading: "Maintenance and Safety",
+        checklistItems: input.maintenanceTasks,
+      },
+      {
+        type: "signature_block",
+        fields: [
+          "trainer",
+          "scheduled_date",
+          "completed_date",
+          "trainee_signature_date",
+        ],
+      },
+      {
+        type: "reference_documents",
+        documents: input.references ?? [
+          "Blood Gas Analysis SOP",
+          "ISO 22870",
+          "POCT operational support guidance",
+        ],
+      },
+    ],
+  };
+}
+
+async function seedPrivateOverlay(defaultPasswordHash: string) {
+  if (!privateSeedEnabled) {
+    return;
+  }
+
+  if (!fs.existsSync(privateSeedFilePath)) {
+    console.log(
+      `Private seed enabled, but no file was found at ${privateSeedFilePath}. Skipping private overlay.`,
+    );
+    return;
+  }
+
+  const privateSeed = JSON.parse(
+    fs.readFileSync(privateSeedFilePath, "utf8"),
+  ) as PrivateSeedFile;
+
+  const hospitalIds = new Map<string, number>();
+  const departmentIds = new Map<string, number>();
+  const trainingUnitIds = new Map<string, number>();
+  const userIds = new Map<string, number>();
+  const templateIndex = new Map<
+    string,
+    { templateId: number; templateVersionId: number }
+  >();
+  const assignmentIndex = new Map<string, number>();
+
+  const getDepartmentKey = (hospitalName: string, departmentName: string) =>
+    `${hospitalName}::${departmentName}`;
+  const getTrainingUnitKey = (
+    hospitalName: string,
+    departmentName: string,
+    trainingUnitName: string,
+  ) => `${hospitalName}::${departmentName}::${trainingUnitName}`;
+
+  for (const hospital of privateSeed.hospitals ?? []) {
+    hospitalIds.set(hospital.name, await upsertHospital(hospital.name));
+  }
+
+  for (const department of privateSeed.departments ?? []) {
+    const hospitalId =
+      hospitalIds.get(department.hospitalName) ??
+      (await upsertHospital(department.hospitalName));
+
+    hospitalIds.set(department.hospitalName, hospitalId);
+
+    const departmentId = await upsertDepartment({
+      hospitalId,
+      name: department.name,
+      isPoc: department.isPoc ?? false,
+    });
+
+    departmentIds.set(
+      getDepartmentKey(department.hospitalName, department.name),
+      departmentId,
+    );
+  }
+
+  for (const trainingUnit of privateSeed.trainingUnits ?? []) {
+    const hospitalId =
+      hospitalIds.get(trainingUnit.hospitalName) ??
+      (await upsertHospital(trainingUnit.hospitalName));
+
+    hospitalIds.set(trainingUnit.hospitalName, hospitalId);
+
+    const departmentKey = getDepartmentKey(
+      trainingUnit.hospitalName,
+      trainingUnit.departmentName,
+    );
+    const departmentId =
+      departmentIds.get(departmentKey) ??
+      (await upsertDepartment({
+        hospitalId,
+        name: trainingUnit.departmentName,
+        isPoc: trainingUnit.isPoc ?? false,
+      }));
+
+    departmentIds.set(departmentKey, departmentId);
+
+    const trainingUnitId = await upsertTrainingUnit({
+      departmentId,
+      name: trainingUnit.name,
+    });
+
+    trainingUnitIds.set(
+      getTrainingUnitKey(
+        trainingUnit.hospitalName,
+        trainingUnit.departmentName,
+        trainingUnit.name,
+      ),
+      trainingUnitId,
+    );
+  }
+
+  for (const user of privateSeed.users ?? []) {
+    const hospitalId =
+      hospitalIds.get(user.hospitalName) ??
+      (await upsertHospital(user.hospitalName));
+
+    hospitalIds.set(user.hospitalName, hospitalId);
+
+    const userPasswordHash = user.password
+      ? await bcrypt.hash(user.password, 10)
+      : user.passwordHash || defaultPasswordHash;
+
+    const userId = await upsertUser({
+      hospitalId,
+      name: user.name,
+      email: user.email,
+      passwordHash: userPasswordHash,
+      role: user.role,
+      staffType: user.staffType,
+    });
+
+    userIds.set(user.email, userId);
+
+    for (const trainingUnitName of user.trainingUnitNames ?? []) {
+      const matchingTrainingUnitEntry = [...trainingUnitIds.entries()].find(
+        ([key]) =>
+          key.startsWith(`${user.hospitalName}::`) &&
+          key.endsWith(`::${trainingUnitName}`),
+      );
+
+      if (!matchingTrainingUnitEntry) {
+        throw new Error(
+          `Private seed user ${user.email} references unknown training unit ${trainingUnitName}`,
+        );
+      }
+
+      await assignUserToLab(userId, matchingTrainingUnitEntry[1]);
+    }
+  }
+
+  for (const template of privateSeed.templates ?? []) {
+    const trainingUnitKey = getTrainingUnitKey(
+      template.hospitalName,
+      template.departmentName,
+      template.trainingUnitName,
+    );
+    const trainingUnitId = trainingUnitIds.get(trainingUnitKey);
+    const createdByUserId = userIds.get(template.createdByEmail);
+
+    if (!trainingUnitId) {
+      throw new Error(
+        `Private seed template ${template.name} references unknown training unit ${template.trainingUnitName}`,
+      );
+    }
+
+    if (!createdByUserId) {
+      throw new Error(
+        `Private seed template ${template.name} references unknown creator ${template.createdByEmail}`,
+      );
+    }
+
+    const templateResult = await upsertTemplateWithVersion({
+      name: template.name,
+      labId: trainingUnitId,
+      createdBy: createdByUserId,
+      formFamilyReference: template.formFamilyReference,
+      templateKind: template.templateKind,
+      targetStaffType: template.targetStaffType,
+      schemaJson: template.schemaJson,
+    });
+
+    templateIndex.set(
+      `${template.trainingUnitName}::${template.name}`,
+      templateResult,
+    );
+  }
+
+  for (const assignment of privateSeed.assignments ?? []) {
+    const traineeId = userIds.get(assignment.traineeEmail);
+    const assignedById = userIds.get(assignment.assignedByEmail);
+    const templateEntry = templateIndex.get(
+      `${assignment.trainingUnitName}::${assignment.templateName}`,
+    );
+
+    if (!traineeId) {
+      throw new Error(
+        `Private seed assignment references unknown trainee ${assignment.traineeEmail}`,
+      );
+    }
+
+    if (!assignedById) {
+      throw new Error(
+        `Private seed assignment references unknown assigner ${assignment.assignedByEmail}`,
+      );
+    }
+
+    if (!templateEntry) {
+      throw new Error(
+        `Private seed assignment references unknown template ${assignment.templateName}`,
+      );
+    }
+
+    const assignmentId = await upsertTrainingAssignment({
+      userId: traineeId,
+      templateId: templateEntry.templateId,
+      labId: (
+        await pool.query<{ training_unit_id: number }>(
+          `
+          SELECT training_unit_id
+          FROM templates
+          WHERE id = $1
+          `,
+          [templateEntry.templateId],
+        )
+      ).rows[0]!.training_unit_id,
+      assignedBy: assignedById,
+      renewalIntervalMonths: assignment.renewalIntervalMonths,
+      nextDueAt: assignment.nextDueAt,
+    });
+
+    assignmentIndex.set(
+      `${assignment.traineeEmail}::${assignment.trainingUnitName}::${assignment.templateName}`,
+      assignmentId,
+    );
+  }
+
+  for (const record of privateSeed.records ?? []) {
+    const traineeId = userIds.get(record.traineeEmail);
+    const assignedTrainerId = record.assignedTrainerEmail
+      ? (userIds.get(record.assignedTrainerEmail) ?? null)
+      : null;
+    const templateEntry = templateIndex.get(
+      `${record.trainingUnitName}::${record.templateName}`,
+    );
+    const trainingAssignmentId = record.trainingAssignmentTemplateName
+      ? (assignmentIndex.get(
+          `${record.traineeEmail}::${record.trainingUnitName}::${record.trainingAssignmentTemplateName}`,
+        ) ?? null)
+      : null;
+
+    if (!traineeId) {
+      throw new Error(
+        `Private seed record references unknown trainee ${record.traineeEmail}`,
+      );
+    }
+
+    if (record.assignedTrainerEmail && assignedTrainerId === null) {
+      throw new Error(
+        `Private seed record references unknown trainer ${record.assignedTrainerEmail}`,
+      );
+    }
+
+    if (!templateEntry) {
+      throw new Error(
+        `Private seed record references unknown template ${record.templateName}`,
+      );
+    }
+
+    await upsertTrainingRecord({
+      traineeId,
+      templateVersionId: templateEntry.templateVersionId,
+      assignedTrainerId,
+      trainingAssignmentId,
+      scheduledAt: record.scheduledAt ?? record.completedAt ?? record.expiresAt,
+      completedAt: record.completedAt ?? null,
+      traineeSignedAt: record.traineeSignedAt ?? null,
+      expiresAt: record.expiresAt,
+      status: record.status ?? AssignmentStatus.PENDING,
+      assessmentPayloadJson: record.assessmentPayloadJson ?? {},
+      specimens: (record.specimens ?? []).map((specimen) => ({
+        specimenLabel: specimen.specimenLabel,
+        specimenType: specimen.specimenType ?? "",
+        analyserReference: specimen.analyserReference ?? "",
+        processedAt:
+          specimen.processedAt ??
+          record.completedAt ??
+          record.scheduledAt ??
+          record.expiresAt,
+        resultSummary: specimen.resultSummary ?? "",
+      })),
+    });
+  }
+
+  console.log(`Private seed overlay applied from ${privateSeedFilePath}.`);
+}
+
 async function seed() {
   const passwordHash = await bcrypt.hash(demoPassword, 10);
 
@@ -558,8 +973,8 @@ async function seed() {
 
   const adminUserId = await upsertUser({
     hospitalId: cuhHospitalId,
-    name: "Portal Admin",
-    email: "admin@test.com",
+    name: "Demo Portal Admin",
+    email: "portal.admin@example.test",
     passwordHash,
     role: Role.ADMIN,
     staffType: StaffType.TRAINING_COORDINATOR,
@@ -567,8 +982,8 @@ async function seed() {
 
   const jackCoordinatorId = await upsertUser({
     hospitalId: cuhHospitalId,
-    name: "Jack Kenny",
-    email: "jack.kenny@test.com",
+    name: "Demo Training Coordinator",
+    email: "training.coordinator@example.test",
     passwordHash,
     role: Role.ADMIN,
     staffType: StaffType.TRAINING_COORDINATOR,
@@ -576,8 +991,8 @@ async function seed() {
 
   const seanTrainerId = await upsertUser({
     hospitalId: cuhHospitalId,
-    name: "Sean O'Brien",
-    email: "sean.obrien@test.com",
+    name: "Demo Section Trainer",
+    email: "section.trainer@example.test",
     passwordHash,
     role: Role.TRAINER,
     staffType: StaffType.SENIOR_MEDICAL_SCIENTIST,
@@ -585,11 +1000,20 @@ async function seed() {
 
   const ciaraScientistId = await upsertUser({
     hospitalId: cuhHospitalId,
-    name: "Ciara Murphy",
-    email: "ciara.murphy@test.com",
+    name: "Demo Scientist Trainee",
+    email: "scientist.trainee@example.test",
     passwordHash,
     role: Role.STAFF,
     staffType: StaffType.BASIC_GRADE_SCIENTIST,
+  });
+
+  const paulaPoctCoordinatorId = await upsertUser({
+    hospitalId: cuhHospitalId,
+    name: "Demo POCT Coordinator",
+    email: "poct.coordinator@example.test",
+    passwordHash,
+    role: Role.ADMIN,
+    staffType: StaffType.TRAINING_COORDINATOR,
   });
 
   console.log("Demo users seeded.");
@@ -622,7 +1046,7 @@ async function seed() {
     departmentId: pocDepartmentId,
     name: "Blood Gas",
   });
-  await upsertTrainingUnit({
+  const glucoseMeterUnitId = await upsertTrainingUnit({
     departmentId: pocDepartmentId,
     name: "Glucose Meter",
   });
@@ -666,12 +1090,13 @@ async function seed() {
   await Promise.all([
     assignUserToLab(adminUserId, clinicalBiochemistryUnitId),
     assignUserToLab(adminUserId, bloodGasUnitId),
+    assignUserToLab(paulaPoctCoordinatorId, bloodGasUnitId),
+    assignUserToLab(paulaPoctCoordinatorId, glucoseMeterUnitId),
     assignUserToLab(jackCoordinatorId, massSpecLabId),
     assignUserToLab(seanTrainerId, massSpecLabId),
     assignUserToLab(ciaraScientistId, massSpecLabId),
     assignUserToLab(ciaraScientistId, clinicalBiochemistryUnitId),
     assignUserToLab(seanTrainerId, clinicalBiochemistryUnitId),
-    assignUserToLab(jackCoordinatorId, bloodGasUnitId),
     assignUserToLab(adminUserId, immunologyUnitId),
     ...[
       au5800UnitId,
@@ -695,7 +1120,7 @@ async function seed() {
       dynamicFunctionTestsUnitId,
       authorisationUnitId,
     ].map((trainingUnitId) =>
-      assignUserToLab(ciaraScientistId, trainingUnitId)
+      assignUserToLab(ciaraScientistId, trainingUnitId),
     ),
   ]);
 
@@ -780,10 +1205,7 @@ async function seed() {
           method: "DOEM",
         },
       ],
-      references: [
-        "FOR-CUH-PAT-2",
-        "Mass Spectrometry TDM SOP",
-      ],
+      references: ["FOR-CUH-PAT-2", "Mass Spectrometry TDM SOP"],
     }),
   });
 
@@ -816,7 +1238,8 @@ async function seed() {
           method: "DORR",
         },
         {
-          taskLabel: "Assay troubleshooting, escalation, and quality documentation",
+          taskLabel:
+            "Assay troubleshooting, escalation, and quality documentation",
           method: "DOEM",
         },
       ],
@@ -965,10 +1388,7 @@ async function seed() {
           method: "DOWP",
         },
       ],
-      references: [
-        "PPG-CUH-PAT-1420",
-        "FOR-CUH-PAT-158",
-      ],
+      references: ["PPG-CUH-PAT-1420", "FOR-CUH-PAT-158"],
     }),
   });
 
@@ -990,7 +1410,8 @@ async function seed() {
       ],
       competencyTasks: [
         {
-          taskLabel: "DXA 5000 operation and maintenance competency questionnaire",
+          taskLabel:
+            "DXA 5000 operation and maintenance competency questionnaire",
           method: "WA + DOWP",
         },
         {
@@ -1095,7 +1516,8 @@ async function seed() {
           method: "DOWP",
         },
         {
-          taskLabel: "Authorisation MCQ booklet completion for new entrants post 2019",
+          taskLabel:
+            "Authorisation MCQ booklet completion for new entrants post 2019",
           method: "WA",
         },
       ],
@@ -1135,11 +1557,13 @@ async function seed() {
           method: "DO/RR",
         },
         {
-          taskLabel: "Health and safety, FOI/data protection, and staff/personnel management",
+          taskLabel:
+            "Health and safety, FOI/data protection, and staff/personnel management",
           method: "DO/RR",
         },
         {
-          taskLabel: "Document control, equipment maintenance, consumables, IQC, EQA, communication, complaints, change management, and verification/flexible scope",
+          taskLabel:
+            "Document control, equipment maintenance, consumables, IQC, EQA, communication, complaints, change management, and verification/flexible scope",
           method: "DO/RR",
         },
       ],
@@ -1210,7 +1634,8 @@ async function seed() {
       ],
       competencyTasks: [
         {
-          taskLabel: "Attendance and contribution at Training & Education meetings",
+          taskLabel:
+            "Attendance and contribution at Training & Education meetings",
           method: "DOWP/RR",
         },
         {
@@ -1218,7 +1643,8 @@ async function seed() {
           method: "DOWP/RR",
         },
         {
-          taskLabel: "Led training session and competency programme and recorded TE/CA on Q-Pulse",
+          taskLabel:
+            "Led training session and competency programme and recorded TE/CA on Q-Pulse",
           method: "DOWP/RR",
         },
         {
@@ -1230,7 +1656,62 @@ async function seed() {
     }),
   });
 
-  console.log("Biochemistry demo templates seeded from sample FOR-CUH-PAT-2 forms.");
+  await upsertTemplateWithVersion({
+    name: "POCT Blood Gas - Scientist Training and Competency",
+    labId: bloodGasUnitId,
+    createdBy: paulaPoctCoordinatorId,
+    formFamilyReference: "POCT-BLOOD-GAS",
+    templateKind: "poct_training_competency",
+    targetStaffType: StaffType.POCT_SCIENTIST,
+    schemaJson: buildPoctBloodGasTemplateSchema({
+      title:
+        "Training and Competency Testing on the Blood Gas Analyser RP500/RL1240: POCT Scientists",
+      targetAudience: "POCT Scientists",
+      maintenanceTasks: [
+        "Perform calibration and QC as applicable for POCT scientist scope.",
+        "Change cartridges and waste container and store reagents correctly.",
+        "Change sample port and paper roll when required.",
+        "Complete cleaning and decontamination procedures safely.",
+        "Apply health and safety, infection control, and universal precautions during analyser use.",
+      ],
+      references: [
+        "Anonymised POCT scientist blood gas checklist",
+        "Blood Gas Analysis SOP",
+        "ISO 22870",
+      ],
+    }),
+  });
+
+  await upsertTemplateWithVersion({
+    name: "POCT Blood Gas - Medical/Nursing/Midwifery Training and Competency",
+    labId: bloodGasUnitId,
+    createdBy: paulaPoctCoordinatorId,
+    formFamilyReference: "POCT-BLOOD-GAS",
+    templateKind: "poct_training_competency",
+    targetStaffType: StaffType.POCT_MEDICAL_NURSING,
+    schemaJson: buildPoctBloodGasTemplateSchema({
+      title:
+        "Training and Competency Testing on the Blood Gas Analyser: Medical/Nursing/Midwifery Staff",
+      targetAudience: "Medical / Nursing / Midwifery Staff",
+      maintenanceTasks: [
+        "Change cartridges and waste container and understand correct reagent storage.",
+        "Change sample port and paper roll when required.",
+        "Complete cleaning and decontamination procedures.",
+        "Understand health and safety, infection control, and universal precautions.",
+        "Understand the implications of password sharing and personal operator accountability.",
+      ],
+      references: [
+        "Anonymised POCT medical/nursing blood gas checklist",
+        "Blood Gas Analysis SOP",
+        "ISO 22870",
+      ],
+    }),
+  });
+
+  console.log(
+    "Biochemistry demo templates seeded from anonymised FOR-CUH-PAT-2 examples.",
+  );
+  console.log("POCT blood gas templates seeded from anonymised demo content.");
 
   const ciaraSteroidAssignmentId = await upsertTrainingAssignment({
     userId: ciaraScientistId,
@@ -1348,7 +1829,7 @@ async function seed() {
     status: AssignmentStatus.SIGNEDOFF,
     assessmentPayloadJson: {
       trainerComments:
-        "Ciara completed supervised steroid panel sample preparation, reviewed QC flags correctly, and demonstrated escalation awareness for peak integration anomalies.",
+        "The demo trainee completed supervised steroid panel sample preparation, reviewed QC flags correctly, and demonstrated escalation awareness for peak integration anomalies.",
       traineeDeclarationAccepted: true,
       sectionChecklist: [
         {
@@ -1371,14 +1852,16 @@ async function seed() {
         specimenType: "Serum",
         analyserReference: "LC-MS/MS Steroid Panel",
         processedAt: isoDaysAgo(43),
-        resultSummary: "Routine adrenal steroid panel processed under supervision.",
+        resultSummary:
+          "Routine adrenal steroid panel processed under supervision.",
       },
       {
         specimenLabel: "MS-STER-24011893",
         specimenType: "Serum",
         analyserReference: "LC-MS/MS Steroid Panel",
         processedAt: isoDaysAgo(42),
-        resultSummary: "Repeat steroid panel with acceptable QC and chromatogram review.",
+        resultSummary:
+          "Repeat steroid panel with acceptable QC and chromatogram review.",
       },
     ],
   });
@@ -1414,7 +1897,8 @@ async function seed() {
         specimenType: "Plasma",
         analyserReference: "LC-MS/MS TDM",
         processedAt: addDays(2),
-        resultSummary: "Training specimen placeholder for upcoming TDM refresher.",
+        resultSummary:
+          "Training specimen placeholder for upcoming TDM refresher.",
       },
     ],
   });
@@ -1431,7 +1915,7 @@ async function seed() {
     status: AssignmentStatus.SIGNEDOFF,
     assessmentPayloadJson: {
       trainerComments:
-        "Sean completed the annual Mass Spectrometry senior trainer review with focus on section supervision and trainee signoff governance.",
+        "The demo section trainer completed the annual Mass Spectrometry senior trainer review with focus on section supervision and trainee signoff governance.",
       traineeDeclarationAccepted: true,
       sectionChecklist: [
         {
@@ -1450,39 +1934,50 @@ async function seed() {
         specimenType: "Governance review",
         analyserReference: "Mass Spectrometry section",
         processedAt: isoDaysAgo(11),
-        resultSummary: "Annual review of section training records and escalation logs.",
+        resultSummary:
+          "Annual review of section training records and escalation logs.",
       },
     ],
   });
 
   console.log("Mass Spectrometry demo training records seeded.");
+
+  await seedPrivateOverlay(passwordHash);
+
   console.table([
     {
-      name: "Portal Admin",
-      email: "admin@test.com",
+      name: "Demo Portal Admin",
+      email: "portal.admin@example.test",
       role: Role.ADMIN,
       staffType: StaffType.TRAINING_COORDINATOR,
       password: demoPassword,
     },
     {
-      name: "Jack Kenny",
-      email: "jack.kenny@test.com",
+      name: "Demo Training Coordinator",
+      email: "training.coordinator@example.test",
       role: Role.ADMIN,
       staffType: StaffType.TRAINING_COORDINATOR,
       password: demoPassword,
     },
     {
-      name: "Sean O'Brien",
-      email: "sean.obrien@test.com",
+      name: "Demo Section Trainer",
+      email: "section.trainer@example.test",
       role: Role.TRAINER,
       staffType: StaffType.SENIOR_MEDICAL_SCIENTIST,
       password: demoPassword,
     },
     {
-      name: "Ciara Murphy",
-      email: "ciara.murphy@test.com",
+      name: "Demo Scientist Trainee",
+      email: "scientist.trainee@example.test",
       role: Role.STAFF,
       staffType: StaffType.BASIC_GRADE_SCIENTIST,
+      password: demoPassword,
+    },
+    {
+      name: "Demo POCT Coordinator",
+      email: "poct.coordinator@example.test",
+      role: Role.ADMIN,
+      staffType: StaffType.TRAINING_COORDINATOR,
       password: demoPassword,
     },
   ]);

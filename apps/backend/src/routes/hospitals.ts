@@ -13,6 +13,7 @@ import {
   listHospitals,
   updateHospital,
 } from "../services/hospital-service";
+import { maybeAutoSyncPrivateSeed } from "../services/private-seed-sync-service";
 
 interface HospitalParams {
   Params: {
@@ -32,17 +33,13 @@ const hospitalRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireAnyRole([
-          Role.ADMIN,
-          Role.TRAINER,
-          Role.STAFF,
-        ]),
+        fastify.requireAnyRole([Role.ADMIN, Role.TRAINER, Role.STAFF]),
       ],
     },
     async (request, reply) => {
       const scope = await getHospitalAccessScope(
         fastify.db,
-        Number(request.user.id)
+        Number(request.user.id),
       );
 
       if (!scope) {
@@ -51,11 +48,11 @@ const hospitalRoutes: FastifyPluginAsync = async (fastify) => {
 
       const hospitals = await listHospitals(
         fastify.db,
-        resolveScopedHospitalId(scope)
+        resolveScopedHospitalId(scope),
       );
 
       return { hospitals };
-    }
+    },
   );
 
   fastify.get<HospitalParams>(
@@ -63,11 +60,7 @@ const hospitalRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireAnyRole([
-          Role.ADMIN,
-          Role.TRAINER,
-          Role.STAFF,
-        ]),
+        fastify.requireAnyRole([Role.ADMIN, Role.TRAINER, Role.STAFF]),
       ],
     },
     async (request, reply) => {
@@ -85,7 +78,7 @@ const hospitalRoutes: FastifyPluginAsync = async (fastify) => {
 
       const scope = await getHospitalAccessScope(
         fastify.db,
-        Number(request.user.id)
+        Number(request.user.id),
       );
 
       if (!scope) {
@@ -99,16 +92,13 @@ const hospitalRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return { hospital };
-    }
+    },
   );
 
   fastify.post<HospitalBody>(
     "/hospitals",
     {
-      preHandler: [
-        fastify.authenticate,
-        fastify.requireRole(Role.ADMIN),
-      ],
+      preHandler: [fastify.authenticate, fastify.requireRole(Role.ADMIN)],
     },
     async (request, reply) => {
       const name = request.body.name?.trim();
@@ -120,7 +110,7 @@ const hospitalRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const scope = await getHospitalAccessScope(
           fastify.db,
-          Number(request.user.id)
+          Number(request.user.id),
         );
 
         if (!scope) {
@@ -135,26 +125,23 @@ const hospitalRoutes: FastifyPluginAsync = async (fastify) => {
 
         const hospital = await createHospital(fastify.db, name);
 
+        await maybeAutoSyncPrivateSeed(fastify.db);
+
         return reply.status(201).send({ hospital });
       } catch (error: any) {
         if (error.code === "23505") {
-          return reply
-            .status(409)
-            .send({ message: "Hospital already exists" });
+          return reply.status(409).send({ message: "Hospital already exists" });
         }
 
         throw error;
       }
-    }
+    },
   );
 
   fastify.put<HospitalParams & HospitalBody>(
     "/hospitals/:id",
     {
-      preHandler: [
-        fastify.authenticate,
-        fastify.requireRole(Role.ADMIN),
-      ],
+      preHandler: [fastify.authenticate, fastify.requireRole(Role.ADMIN)],
     },
     async (request, reply) => {
       const hospitalId = Number(request.params.id);
@@ -171,7 +158,7 @@ const hospitalRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const scope = await getHospitalAccessScope(
           fastify.db,
-          Number(request.user.id)
+          Number(request.user.id),
         );
 
         if (!scope) {
@@ -184,36 +171,35 @@ const hospitalRoutes: FastifyPluginAsync = async (fastify) => {
           });
         }
 
-        const hospital = await updateHospital(
-          fastify.db,
-          hospitalId,
-          name
-        );
+        if (!scope.canAccessAllHospitals) {
+          return reply.status(403).send({
+            message: "Only a global admin can update hospitals",
+          });
+        }
+
+        const hospital = await updateHospital(fastify.db, hospitalId, name);
 
         if (!hospital) {
           return reply.status(404).send({ message: "Hospital not found" });
         }
 
+        await maybeAutoSyncPrivateSeed(fastify.db);
+
         return { hospital };
       } catch (error: any) {
         if (error.code === "23505") {
-          return reply
-            .status(409)
-            .send({ message: "Hospital already exists" });
+          return reply.status(409).send({ message: "Hospital already exists" });
         }
 
         throw error;
       }
-    }
+    },
   );
 
   fastify.delete<HospitalParams>(
     "/hospitals/:id",
     {
-      preHandler: [
-        fastify.authenticate,
-        fastify.requireRole(Role.ADMIN),
-      ],
+      preHandler: [fastify.authenticate, fastify.requireRole(Role.ADMIN)],
     },
     async (request, reply) => {
       const hospitalId = Number(request.params.id);
@@ -225,7 +211,7 @@ const hospitalRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const scope = await getHospitalAccessScope(
           fastify.db,
-          Number(request.user.id)
+          Number(request.user.id),
         );
 
         if (!scope) {
@@ -238,11 +224,19 @@ const hospitalRoutes: FastifyPluginAsync = async (fastify) => {
           });
         }
 
+        if (!scope.canAccessAllHospitals) {
+          return reply.status(403).send({
+            message: "Only a global admin can delete hospitals",
+          });
+        }
+
         const hospital = await deleteHospital(fastify.db, hospitalId);
 
         if (!hospital) {
           return reply.status(404).send({ message: "Hospital not found" });
         }
+
+        await maybeAutoSyncPrivateSeed(fastify.db);
 
         return { hospital };
       } catch (error: any) {
@@ -254,7 +248,7 @@ const hospitalRoutes: FastifyPluginAsync = async (fastify) => {
 
         throw error;
       }
-    }
+    },
   );
 };
 

@@ -13,13 +13,17 @@ import {
   TrainingRecordSummary,
   UserSummary,
 } from "../api";
+import { CurrentUser } from "../../auth/api";
 import { ReportExportActions } from "./ReportExportActions";
 import {
   downloadListReportDocx,
   downloadTrainingRecordDocument,
 } from "../../../shared/export/reportExport";
+import { confirmManagedAction } from "./managementConfirm";
+import { getRoleDisplayLabel } from "./roleLabels";
 
 interface TrainingRecordsPanelProps {
+  currentUser: CurrentUser;
   assignments: TrainingAssignmentSummary[];
   records: TrainingRecordSummary[];
   templates: TemplateSummary[];
@@ -65,6 +69,7 @@ const statusOptions = [
 ];
 
 export function TrainingRecordsPanel({
+  currentUser,
   assignments,
   records,
   templates,
@@ -247,6 +252,19 @@ export function TrainingRecordsPanel({
                   resultSummary: resultSummary.trim() || null,
                 }));
 
+              const confirmed = confirmManagedAction(
+                currentUser,
+                `Create a training record for "${
+                  sortedUsers.find((user) => user.id === traineeId)?.name ||
+                  "the selected trainee"
+                }" with status "${status}"?`,
+                "Please confirm again to create this training record."
+              );
+
+              if (!confirmed) {
+                return;
+              }
+
               startTransition(() => {
                 void onCreateRecord({
                   traineeId,
@@ -382,7 +400,7 @@ export function TrainingRecordsPanel({
                   <option value="none">Not assigned</option>
                   {trainerUsers.map((user) => (
                     <option key={user.id} value={user.id}>
-                      {user.name} · {user.role}
+                      {user.name} · {getRoleDisplayLabel(user)}
                     </option>
                   ))}
                 </select>

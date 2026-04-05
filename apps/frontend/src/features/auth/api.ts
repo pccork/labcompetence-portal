@@ -8,6 +8,7 @@ export interface CurrentUser {
   email: string;
   role: string;
   staff_type: string;
+  is_global_admin: boolean;
   created_at: string;
 }
 

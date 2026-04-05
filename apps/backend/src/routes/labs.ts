@@ -15,6 +15,7 @@ import {
   listLabs,
   updateLab,
 } from "../services/lab-service";
+import { maybeAutoSyncPrivateSeed } from "../services/private-seed-sync-service";
 
 interface CreateLabBody {
   Body: {
@@ -38,17 +39,13 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireAnyRole([
-          Role.ADMIN,
-          Role.TRAINER,
-          Role.STAFF,
-        ]),
+        fastify.requireAnyRole([Role.ADMIN, Role.TRAINER, Role.STAFF]),
       ],
     },
     async (request, reply) => {
       const scope = await getHospitalAccessScope(
         fastify.db,
-        Number(request.user.id)
+        Number(request.user.id),
       );
 
       if (!scope) {
@@ -58,20 +55,17 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
       const labs = await listLabs(
         fastify.db,
         resolveScopedHospitalId(scope),
-        scope.trainingUnitIds
+        scope.trainingUnitIds,
       );
 
       return { labs };
-    }
+    },
   );
 
   fastify.post<CreateLabBody>(
     "/labs",
     {
-      preHandler: [
-        fastify.authenticate,
-        fastify.requireRole(Role.ADMIN),
-      ],
+      preHandler: [fastify.authenticate, fastify.requireRole(Role.ADMIN)],
     },
     async (request, reply) => {
       const hospitalId = Number(request.body?.hospitalId);
@@ -113,7 +107,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
 
       const scope = await getHospitalAccessScope(
         fastify.db,
-        Number(request.user.id)
+        Number(request.user.id),
       );
 
       if (!scope) {
@@ -133,8 +127,10 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
           name,
           isPoc,
           departmentId,
-          departmentName
+          departmentName,
         );
+
+        await maybeAutoSyncPrivateSeed(fastify.db);
 
         return reply.status(201).send({ lab });
       } catch (error: any) {
@@ -146,16 +142,13 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
 
         throw error;
       }
-    }
+    },
   );
 
   fastify.put<LabParams & CreateLabBody>(
     "/labs/:id",
     {
-      preHandler: [
-        fastify.authenticate,
-        fastify.requireRole(Role.ADMIN),
-      ],
+      preHandler: [fastify.authenticate, fastify.requireRole(Role.ADMIN)],
     },
     async (request, reply) => {
       const labId = Number(request.params.id);
@@ -202,7 +195,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
 
       const scope = await getHospitalAccessScope(
         fastify.db,
-        Number(request.user.id)
+        Number(request.user.id),
       );
 
       if (!scope) {
@@ -212,9 +205,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
       const existingLab = await findLabById(fastify.db, labId);
 
       if (!existingLab) {
-        return reply
-          .status(404)
-          .send({ message: "Training unit not found" });
+        return reply.status(404).send({ message: "Training unit not found" });
       }
 
       if (
@@ -222,12 +213,18 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
           scope,
           existingLab.id,
           existingLab.hospital_id,
-          existingLab.is_poc
+          existingLab.is_poc,
         ) ||
         !canAccessHospital(scope, hospitalId)
       ) {
         return reply.status(403).send({
           message: "You cannot update labs across this hospital boundary",
+        });
+      }
+
+      if (!scope.canAccessAllHospitals) {
+        return reply.status(403).send({
+          message: "Only a global admin can update sections",
         });
       }
 
@@ -239,14 +236,14 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
           name,
           isPoc,
           departmentId,
-          departmentName
+          departmentName,
         );
 
         if (!lab) {
-          return reply
-            .status(404)
-            .send({ message: "Training unit not found" });
+          return reply.status(404).send({ message: "Training unit not found" });
         }
+
+        await maybeAutoSyncPrivateSeed(fastify.db);
 
         return { lab };
       } catch (error: any) {
@@ -258,16 +255,13 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
 
         throw error;
       }
-    }
+    },
   );
 
   fastify.delete<LabParams>(
     "/labs/:id",
     {
-      preHandler: [
-        fastify.authenticate,
-        fastify.requireRole(Role.ADMIN),
-      ],
+      preHandler: [fastify.authenticate, fastify.requireRole(Role.ADMIN)],
     },
     async (request, reply) => {
       const labId = Number(request.params.id);
@@ -279,7 +273,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const scope = await getHospitalAccessScope(
           fastify.db,
-          Number(request.user.id)
+          Number(request.user.id),
         );
 
         if (!scope) {
@@ -289,9 +283,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
         const existingLab = await findLabById(fastify.db, labId);
 
         if (!existingLab) {
-          return reply
-            .status(404)
-            .send({ message: "Training unit not found" });
+          return reply.status(404).send({ message: "Training unit not found" });
         }
 
         if (
@@ -299,7 +291,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
             scope,
             existingLab.id,
             existingLab.hospital_id,
-            existingLab.is_poc
+            existingLab.is_poc,
           )
         ) {
           return reply.status(403).send({
@@ -307,13 +299,19 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
           });
         }
 
+        if (!scope.canAccessAllHospitals) {
+          return reply.status(403).send({
+            message: "Only a global admin can delete sections",
+          });
+        }
+
         const lab = await deleteLab(fastify.db, labId);
 
         if (!lab) {
-          return reply
-            .status(404)
-            .send({ message: "Training unit not found" });
+          return reply.status(404).send({ message: "Training unit not found" });
         }
+
+        await maybeAutoSyncPrivateSeed(fastify.db);
 
         return { lab };
       } catch (error: any) {
@@ -325,7 +323,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
 
         throw error;
       }
-    }
+    },
   );
 };
 

@@ -26,7 +26,7 @@ export interface PocRegistrationLink {
 }
 
 export interface PocSelfRegistrationResult {
-  user: SafeUser;
+  user: SafeUser | null;
   lab: Lab;
   registrationLink: PocRegistrationLink;
   trainingRequest: PocTrainingRequest;
@@ -35,11 +35,12 @@ export interface PocSelfRegistrationResult {
 export interface PocTrainingRequest {
   id: number;
   registration_link_id: number;
-  user_id: number;
+  user_id: number | null;
   trainee_hospital_id: number;
   trainee_hospital_name: string;
   trainee_name: string;
   trainee_email: string;
+  trainee_staff_type: StaffType;
   lab_id: number;
   lab_name: string;
   department_id: number;
@@ -200,7 +201,7 @@ export async function registerTraineeFromPocLink(
     hospitalId: number;
     name: string;
     email: string;
-    password: string;
+    password?: string;
     staffType?: StaffType;
   }
 ) {
@@ -222,18 +223,47 @@ export async function registerTraineeFromPocLink(
   try {
     await client.query("BEGIN");
 
-    const user = await createUser(
-      client,
-      input.hospitalId,
-      input.name,
-      input.email,
-      input.password,
-      Role.STAFF,
-      input.staffType ?? StaffType.POCT_MEDICAL_NURSING
+    const existingUserResult = await client.query<SafeUser>(
+      `
+      SELECT
+        u.id,
+        u.hospital_id,
+        h.name AS hospital_name,
+        u.name,
+        u.email,
+        u.role,
+        u.staff_type,
+        u.is_global_admin,
+        u.is_active,
+        u.created_at
+      FROM users u
+      INNER JOIN hospitals h ON h.id = u.hospital_id
+      WHERE lower(u.email) = lower($1)
+        AND u.is_active = true
+      ORDER BY u.id ASC
+      LIMIT 1
+      `,
+      [input.email],
     );
 
-    if (!user) {
-      throw new Error("Failed to create POC trainee");
+    let user = existingUserResult.rows[0] ?? null;
+
+    if (!user && input.password) {
+      const createdUser = await createUser(
+        client,
+        input.hospitalId,
+        input.name,
+        input.email,
+        input.password,
+        Role.STAFF,
+        input.staffType ?? StaffType.POCT_MEDICAL_NURSING
+      );
+
+      if (!createdUser) {
+        throw new Error("Failed to create POC trainee");
+      }
+
+      user = createdUser;
     }
 
     const trainingRequestResult = await client.query<{ id: number }>(
@@ -243,19 +273,27 @@ export async function registerTraineeFromPocLink(
         user_id,
         lab_id,
         training_unit_id,
+        requested_hospital_id,
+        requested_name,
+        requested_email,
+        requested_staff_type,
         is_training_approved,
         trainer_reply_status,
         training_location,
         training_time_details
       )
-      VALUES ($1, $2, $3, $4, true, $5, $6, $7)
+      VALUES ($1, $2, $3, $4, $5, $6, lower($7), $8, true, $9, $10, $11)
       RETURNING id
       `,
       [
         registrationLink.id,
-        user.id,
+        user?.id ?? null,
         registrationLink.department_id,
         registrationLink.lab_id,
+        user?.hospital_id ?? input.hospitalId,
+        user?.name ?? input.name,
+        user?.email ?? input.email,
+        user?.staff_type ?? input.staffType ?? StaffType.POCT_MEDICAL_NURSING,
         PocTrainingRequestStatus.PENDING_TRAINER_REPLY,
         registrationLink.default_training_location,
         registrationLink.default_training_time_details,
@@ -330,10 +368,11 @@ export async function listPocTrainingRequests(
       ptr.id,
       ptr.registration_link_id,
       ptr.user_id,
-      u.hospital_id AS trainee_hospital_id,
-      trainee_hospital.name AS trainee_hospital_name,
-      u.name AS trainee_name,
-      u.email AS trainee_email,
+      COALESCE(u.hospital_id, ptr.requested_hospital_id) AS trainee_hospital_id,
+      COALESCE(trainee_hospital.name, requested_hospital.name) AS trainee_hospital_name,
+      COALESCE(u.name, ptr.requested_name) AS trainee_name,
+      COALESCE(u.email, ptr.requested_email) AS trainee_email,
+      COALESCE(u.staff_type, ptr.requested_staff_type) AS trainee_staff_type,
       ptr.training_unit_id AS lab_id,
       tu.name AS lab_name,
       l.id AS department_id,
@@ -351,8 +390,9 @@ export async function listPocTrainingRequests(
       ptr.responded_at,
       ptr.requested_at
     FROM poc_training_requests ptr
-    INNER JOIN users u ON u.id = ptr.user_id
-    INNER JOIN hospitals trainee_hospital ON trainee_hospital.id = u.hospital_id
+    LEFT JOIN users u ON u.id = ptr.user_id
+    LEFT JOIN hospitals trainee_hospital ON trainee_hospital.id = u.hospital_id
+    INNER JOIN hospitals requested_hospital ON requested_hospital.id = ptr.requested_hospital_id
     INNER JOIN training_units tu ON tu.id = ptr.training_unit_id
     INNER JOIN labs l ON l.id = tu.lab_id
     INNER JOIN hospitals lab_hospital ON lab_hospital.id = l.hospital_id
@@ -384,10 +424,11 @@ export async function findPocTrainingRequestById(
       ptr.id,
       ptr.registration_link_id,
       ptr.user_id,
-      u.hospital_id AS trainee_hospital_id,
-      trainee_hospital.name AS trainee_hospital_name,
-      u.name AS trainee_name,
-      u.email AS trainee_email,
+      COALESCE(u.hospital_id, ptr.requested_hospital_id) AS trainee_hospital_id,
+      COALESCE(trainee_hospital.name, requested_hospital.name) AS trainee_hospital_name,
+      COALESCE(u.name, ptr.requested_name) AS trainee_name,
+      COALESCE(u.email, ptr.requested_email) AS trainee_email,
+      COALESCE(u.staff_type, ptr.requested_staff_type) AS trainee_staff_type,
       ptr.training_unit_id AS lab_id,
       tu.name AS lab_name,
       l.id AS department_id,
@@ -405,8 +446,9 @@ export async function findPocTrainingRequestById(
       ptr.responded_at,
       ptr.requested_at
     FROM poc_training_requests ptr
-    INNER JOIN users u ON u.id = ptr.user_id
-    INNER JOIN hospitals trainee_hospital ON trainee_hospital.id = u.hospital_id
+    LEFT JOIN users u ON u.id = ptr.user_id
+    LEFT JOIN hospitals trainee_hospital ON trainee_hospital.id = u.hospital_id
+    INNER JOIN hospitals requested_hospital ON requested_hospital.id = ptr.requested_hospital_id
     INNER JOIN training_units tu ON tu.id = ptr.training_unit_id
     INNER JOIN labs l ON l.id = tu.lab_id
     INNER JOIN hospitals lab_hospital ON lab_hospital.id = l.hospital_id
@@ -466,13 +508,15 @@ export async function replyToPocTrainingRequest(
 
     if (input.status === PocTrainingRequestStatus.SCHEDULED) {
       const requestRow = await client.query<{
-        user_id: number;
+        user_id: number | null;
         lab_id: number;
+        requested_email: string;
       }>(
         `
         SELECT
           user_id,
-          training_unit_id AS lab_id
+          training_unit_id AS lab_id,
+          requested_email
         FROM poc_training_requests
         WHERE id = $1
         `,
@@ -485,14 +529,45 @@ export async function replyToPocTrainingRequest(
         throw new Error("Failed to load POC training request");
       }
 
-      await client.query(
-        `
-        INSERT INTO user_training_units (user_id, training_unit_id)
-        VALUES ($1, $2)
-        ON CONFLICT (user_id, training_unit_id) DO NOTHING
-        `,
-        [request.user_id, request.lab_id]
-      );
+      let targetUserId = request.user_id;
+
+      if (!targetUserId) {
+        const matchedUserResult = await client.query<{ id: number }>(
+          `
+          SELECT id
+          FROM users
+          WHERE lower(email) = lower($1)
+            AND is_active = true
+          ORDER BY id ASC
+          LIMIT 1
+          `,
+          [request.requested_email]
+        );
+
+        targetUserId = matchedUserResult.rows[0]?.id ?? null;
+
+        if (targetUserId) {
+          await client.query(
+            `
+            UPDATE poc_training_requests
+            SET user_id = $2
+            WHERE id = $1
+            `,
+            [input.requestId, targetUserId]
+          );
+        }
+      }
+
+      if (targetUserId) {
+        await client.query(
+          `
+          INSERT INTO user_training_units (user_id, training_unit_id)
+          VALUES ($1, $2)
+          ON CONFLICT (user_id, training_unit_id) DO NOTHING
+          `,
+          [targetUserId, request.lab_id]
+        );
+      }
     }
 
     await client.query("COMMIT");

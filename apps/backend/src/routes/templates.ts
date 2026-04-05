@@ -1,8 +1,5 @@
 import { FastifyPluginAsync } from "fastify";
-import {
-  Role,
-  StaffType,
-} from "shared-types";
+import { Role, StaffType } from "shared-types";
 
 import {
   canAccessHospital,
@@ -19,6 +16,7 @@ import {
   listTemplates,
   updateTemplate,
 } from "../services/template-service";
+import { maybeAutoSyncPrivateSeed } from "../services/private-seed-sync-service";
 
 interface TemplateParams {
   Params: {
@@ -47,7 +45,7 @@ interface TemplateVersionBody {
 const allowedStaffTypes = new Set<string>(Object.values(StaffType));
 
 function hasTemplateManagerRole(role: Role) {
-  return role === Role.ADMIN || role === Role.TRAINER;
+  return role === Role.ADMIN;
 }
 
 function sanitizeTemplateBody(body: TemplateBody["Body"]) {
@@ -55,12 +53,10 @@ function sanitizeTemplateBody(body: TemplateBody["Body"]) {
   const labId = Number(body.labId);
   const formFamilyReference =
     body.formFamilyReference?.trim() || "FOR-CUH-PAT-2";
-  const templateKind =
-    body.templateKind?.trim() || "training_event_competency";
-  const targetStaffType = (
+  const templateKind = body.templateKind?.trim() || "training_event_competency";
+  const targetStaffType =
     body.targetStaffType?.trim().toLowerCase() ||
-    StaffType.BASIC_GRADE_SCIENTIST
-  );
+    StaffType.BASIC_GRADE_SCIENTIST;
   const isActive = body.isActive ?? true;
   const schemaJson = body.schemaJson;
 
@@ -81,17 +77,13 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireAnyRole([
-          Role.ADMIN,
-          Role.TRAINER,
-          Role.STAFF,
-        ]),
+        fastify.requireAnyRole([Role.ADMIN, Role.TRAINER, Role.STAFF]),
       ],
     },
     async (request, reply) => {
       const scope = await getHospitalAccessScope(
         fastify.db,
-        Number(request.user.id)
+        Number(request.user.id),
       );
 
       if (!scope) {
@@ -101,11 +93,11 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
       const templates = await listTemplates(
         fastify.db,
         resolveScopedHospitalId(scope),
-        scope.trainingUnitIds
+        scope.canAccessAllHospitals ? undefined : scope.trainingUnitIds,
       );
 
       return { templates };
-    }
+    },
   );
 
   fastify.post<TemplateBody>(
@@ -113,11 +105,7 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireAnyRole([
-          Role.ADMIN,
-          Role.TRAINER,
-          Role.STAFF,
-        ]),
+        fastify.requireAnyRole([Role.ADMIN, Role.TRAINER, Role.STAFF]),
       ],
     },
     async (request, reply) => {
@@ -150,9 +138,7 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       if (!templateKind) {
-        return reply
-          .status(400)
-          .send({ message: "templateKind is required" });
+        return reply.status(400).send({ message: "templateKind is required" });
       }
 
       if (!allowedStaffTypes.has(targetStaffType)) {
@@ -181,42 +167,34 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
 
       const scope = await getHospitalAccessScope(
         fastify.db,
-        Number(request.user.id)
+        Number(request.user.id),
       );
 
       if (!scope) {
         return reply.status(404).send({ message: "User not found" });
       }
 
-      if (
-        !canAccessTrainingUnit(
-          scope,
-          lab.id,
-          lab.hospital_id,
-          lab.is_poc
-        )
-      ) {
+      if (!canAccessTrainingUnit(scope, lab.id, lab.hospital_id, lab.is_poc)) {
         return reply.status(403).send({
           message: "You cannot create templates for this lab",
         });
       }
 
-      const template = await createTemplateWithInitialVersion(
-        fastify.db,
-        {
-          name,
-          labId,
-          createdBy: Number(request.user.id),
-          formFamilyReference,
-          templateKind,
-          targetStaffType: targetStaffType as StaffType,
-          isActive,
-          schemaJson,
-        }
-      );
+      const template = await createTemplateWithInitialVersion(fastify.db, {
+        name,
+        labId,
+        createdBy: Number(request.user.id),
+        formFamilyReference,
+        templateKind,
+        targetStaffType: targetStaffType as StaffType,
+        isActive,
+        schemaJson,
+      });
+
+      await maybeAutoSyncPrivateSeed(fastify.db);
 
       return reply.status(201).send({ template });
-    }
+    },
   );
 
   fastify.get<TemplateParams>(
@@ -224,20 +202,14 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireAnyRole([
-          Role.ADMIN,
-          Role.TRAINER,
-          Role.STAFF,
-        ]),
+        fastify.requireAnyRole([Role.ADMIN, Role.TRAINER, Role.STAFF]),
       ],
     },
     async (request, reply) => {
       const templateId = Number(request.params.id);
 
       if (!Number.isInteger(templateId) || templateId <= 0) {
-        return reply
-          .status(400)
-          .send({ message: "Invalid template id" });
+        return reply.status(400).send({ message: "Invalid template id" });
       }
 
       const template = await findTemplateById(fastify.db, templateId);
@@ -248,7 +220,7 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
 
       const scope = await getHospitalAccessScope(
         fastify.db,
-        Number(request.user.id)
+        Number(request.user.id),
       );
 
       if (!scope) {
@@ -259,13 +231,13 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
         !canAccessHospital(
           scope,
           template.lab_hospital_id,
-          template.lab_is_poc
+          template.lab_is_poc,
         ) ||
         !canAccessTrainingUnit(
           scope,
           template.lab_id,
           template.lab_hospital_id,
-          template.lab_is_poc
+          template.lab_is_poc,
         )
       ) {
         return reply.status(403).send({
@@ -274,28 +246,25 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return { template };
-    }
+    },
   );
 
   fastify.put<TemplateParams & TemplateBody>(
     "/templates/:id",
     {
-      preHandler: [
-        fastify.authenticate,
-        fastify.requireAnyRole([Role.ADMIN, Role.TRAINER]),
-      ],
+      preHandler: [fastify.authenticate, fastify.requireRole(Role.ADMIN)],
     },
     async (request, reply) => {
       const templateId = Number(request.params.id);
 
       if (!Number.isInteger(templateId) || templateId <= 0) {
-        return reply
-          .status(400)
-          .send({ message: "Invalid template id" });
+        return reply.status(400).send({ message: "Invalid template id" });
       }
 
-      const existingTemplateScope =
-        await findTemplateHospitalScopeById(fastify.db, templateId);
+      const existingTemplateScope = await findTemplateHospitalScopeById(
+        fastify.db,
+        templateId,
+      );
 
       if (!existingTemplateScope) {
         return reply.status(404).send({ message: "Template not found" });
@@ -338,34 +307,37 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
 
       const scope = await getHospitalAccessScope(
         fastify.db,
-        Number(request.user.id)
+        Number(request.user.id),
       );
 
       if (!scope) {
         return reply.status(404).send({ message: "User not found" });
       }
 
+      if (scope.canAccessAllHospitals) {
+        return reply.status(403).send({
+          message:
+            "Global admins cannot update templates. Use a local admin or training coordinator account.",
+        });
+      }
+
       if (
         !canAccessHospital(
           scope,
           existingTemplateScope.hospital_id,
-          existingTemplateScope.is_poc
+          existingTemplateScope.is_poc,
         ) ||
         !canAccessTrainingUnit(
           scope,
           existingTemplateScope.lab_id,
           existingTemplateScope.hospital_id,
-          existingTemplateScope.is_poc
+          existingTemplateScope.is_poc,
         ) ||
-        !canAccessTrainingUnit(
-          scope,
-          lab.id,
-          lab.hospital_id,
-          lab.is_poc
-        )
+        !canAccessTrainingUnit(scope, lab.id, lab.hospital_id, lab.is_poc)
       ) {
         return reply.status(403).send({
-          message: "You cannot update this template across this hospital boundary",
+          message:
+            "You cannot update this template across this hospital boundary",
         });
       }
 
@@ -383,26 +355,23 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ message: "Template not found" });
       }
 
+      await maybeAutoSyncPrivateSeed(fastify.db);
+
       return { template };
-    }
+    },
   );
 
   fastify.post<TemplateParams & TemplateVersionBody>(
     "/templates/:id/versions",
     {
-      preHandler: [
-        fastify.authenticate,
-        fastify.requireAnyRole([Role.ADMIN, Role.TRAINER]),
-      ],
+      preHandler: [fastify.authenticate, fastify.requireRole(Role.ADMIN)],
     },
     async (request, reply) => {
       const templateId = Number(request.params.id);
       const schemaJson = request.body.schemaJson;
 
       if (!Number.isInteger(templateId) || templateId <= 0) {
-        return reply
-          .status(400)
-          .send({ message: "Invalid template id" });
+        return reply.status(400).send({ message: "Invalid template id" });
       }
 
       if (!schemaJson || typeof schemaJson !== "object") {
@@ -413,7 +382,7 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
 
       const templateScope = await findTemplateHospitalScopeById(
         fastify.db,
-        templateId
+        templateId,
       );
 
       if (!templateScope) {
@@ -422,40 +391,48 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
 
       const scope = await getHospitalAccessScope(
         fastify.db,
-        Number(request.user.id)
+        Number(request.user.id),
       );
 
       if (!scope) {
         return reply.status(404).send({ message: "User not found" });
       }
 
+      if (scope.canAccessAllHospitals) {
+        return reply.status(403).send({
+          message:
+            "Global admins cannot version templates. Use a local admin or training coordinator account.",
+        });
+      }
+
       if (
         !canAccessHospital(
           scope,
           templateScope.hospital_id,
-          templateScope.is_poc
+          templateScope.is_poc,
         ) ||
         !canAccessTrainingUnit(
           scope,
           templateScope.lab_id,
           templateScope.hospital_id,
-          templateScope.is_poc
+          templateScope.is_poc,
         )
       ) {
         return reply.status(403).send({
-          message:
-            "You cannot create template versions for this hospital",
+          message: "You cannot create template versions for this hospital",
         });
       }
 
       const template = await createTemplateVersion(
         fastify.db,
         templateId,
-        schemaJson
+        schemaJson,
       );
 
+      await maybeAutoSyncPrivateSeed(fastify.db);
+
       return reply.status(201).send({ template });
-    }
+    },
   );
 };
 

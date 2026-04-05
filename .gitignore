@@ -23,3 +23,4 @@ pnpm-debug.log*
 # Local template samples
 apps/backend/template-samples/*.doc
 apps/backend/template-samples/*.docx
+apps/backend/private-seed/

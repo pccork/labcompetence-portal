@@ -4,13 +4,19 @@ import { CurrentUser, fetchCurrentUser, loginUser } from "../features/auth/api";
 import { LoginPanel } from "../features/auth/LoginPanel";
 import {
   archiveUserAccount,
+  createHospital,
+  createLabSection,
+  createPocRegistrationLink,
   createTrainingAssignment,
   createTrainingRecord,
   createTemplate,
   CreateTrainingAssignmentInput,
+  CreatePocRegistrationLinkInput,
   CreateTrainingRecordInput,
   CreateTemplateInput,
   createUserAccount,
+  fetchPocRegistrationLinks,
+  fetchPocTrainingRequests,
   fetchHospitals,
   fetchLabs,
   fetchTemplateDetail,
@@ -21,6 +27,9 @@ import {
   fetchUsers,
   HospitalSummary,
   LabSummary,
+  PocRegistrationLinkSummary,
+  PocTrainingRequestSummary,
+  replyToPocTrainingRequest,
   TemplateSummary,
   TrainingAssignmentSummary,
   TrainingRecordSummary,
@@ -28,6 +37,7 @@ import {
   UserSummary,
 } from "../features/dashboard/api";
 import { DashboardShell } from "../features/dashboard/DashboardShell";
+import { PocRegistrationPage } from "../features/poc/PocRegistrationPage";
 import {
   clearSession,
   loadSession,
@@ -35,12 +45,21 @@ import {
 } from "../shared/session/sessionStore";
 
 export function App() {
+  const pathname = window.location.pathname;
+  const pocRegistrationMatch = pathname.match(/^\/poc\/register\/([^/]+)$/);
+  const registrationCode = pocRegistrationMatch?.[1] ?? null;
   const [token, setToken] = useState(() => loadSession()?.token || null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [labs, setLabs] = useState<LabSummary[]>([]);
   const [hospitals, setHospitals] = useState<HospitalSummary[]>([]);
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
+  const [registrationLinks, setRegistrationLinks] = useState<
+    PocRegistrationLinkSummary[]
+  >([]);
+  const [poctRequests, setPoctRequests] = useState<PocTrainingRequestSummary[]>(
+    [],
+  );
   const [assignments, setAssignments] = useState<TrainingAssignmentSummary[]>(
     []
   );
@@ -52,31 +71,61 @@ export function App() {
     setErrorMessage(null);
 
     try {
+      const me = await fetchCurrentUser(activeToken);
+
+      const commonRequests = await Promise.all([
+        fetchHospitals(activeToken),
+        fetchUsers(activeToken),
+        fetchLabs(activeToken),
+        fetchTemplates(activeToken),
+      ]);
+
       const [
-        me,
         hospitalsResponse,
         usersResponse,
         labsResponse,
         templatesResponse,
-        assignmentsResponse,
-        recordsResponse,
-      ] = await Promise.all([
-        fetchCurrentUser(activeToken),
-        fetchHospitals(activeToken),
-          fetchUsers(activeToken),
-          fetchLabs(activeToken),
-          fetchTemplates(activeToken),
-          fetchTrainingAssignments(activeToken),
-          fetchTrainingRecords(activeToken),
-      ]);
+      ] = commonRequests;
+
+      const workflowResponses = me.user.is_global_admin
+        ? {
+            assignments: { assignments: [] as TrainingAssignmentSummary[] },
+            records: { records: [] as TrainingRecordSummary[] },
+            registrationLinks: {
+              registrationLinks: [] as PocRegistrationLinkSummary[],
+            },
+            poctRequests: { requests: [] as PocTrainingRequestSummary[] },
+          }
+        : me.user.role !== "admin"
+          ? {
+              assignments: await fetchTrainingAssignments(activeToken),
+              records: await fetchTrainingRecords(activeToken),
+              registrationLinks: {
+                registrationLinks: [] as PocRegistrationLinkSummary[],
+              },
+              poctRequests: { requests: [] as PocTrainingRequestSummary[] },
+            }
+        : await Promise.all([
+            fetchTrainingAssignments(activeToken),
+            fetchTrainingRecords(activeToken),
+            fetchPocRegistrationLinks(activeToken),
+            fetchPocTrainingRequests(activeToken),
+          ]).then(([assignments, records, registrationLinks, poctRequests]) => ({
+            assignments,
+            records,
+            registrationLinks,
+            poctRequests,
+          }));
 
       setCurrentUser(me.user);
       setHospitals(hospitalsResponse.hospitals);
       setUsers(usersResponse.users);
       setLabs(labsResponse.labs);
       setTemplates(templatesResponse.templates);
-      setAssignments(assignmentsResponse.assignments);
-      setRecords(recordsResponse.records);
+      setAssignments(workflowResponses.assignments.assignments);
+      setRecords(workflowResponses.records.records);
+      setRegistrationLinks(workflowResponses.registrationLinks.registrationLinks);
+      setPoctRequests(workflowResponses.poctRequests.requests);
     } catch (error) {
       setErrorMessage(
         error instanceof Error
@@ -119,10 +168,16 @@ export function App() {
     setUsers([]);
     setLabs([]);
     setTemplates([]);
+    setRegistrationLinks([]);
+    setPoctRequests([]);
     setAssignments([]);
     setRecords([]);
     setErrorMessage(null);
   };
+
+  if (registrationCode) {
+    return <PocRegistrationPage code={registrationCode} />;
+  }
 
   if (!token || !currentUser) {
     return <LoginPanel onLogin={handleLogin} errorMessage={errorMessage} />;
@@ -137,6 +192,8 @@ export function App() {
       templates={templates}
       assignments={assignments}
       records={records}
+      registrationLinks={registrationLinks}
+      poctRequests={poctRequests}
       onRefresh={() =>
         startTransition(() => {
           void loadDashboard(token);
@@ -144,6 +201,14 @@ export function App() {
       }
       onCreateUser={async (input) => {
         await createUserAccount(token, input);
+        await loadDashboard(token);
+      }}
+      onCreateHospital={async (input) => {
+        await createHospital(token, input);
+        await loadDashboard(token);
+      }}
+      onCreateLab={async (input) => {
+        await createLabSection(token, input);
         await loadDashboard(token);
       }}
       onArchiveUser={async (userId: number) => {
@@ -182,6 +247,16 @@ export function App() {
       onFetchRecordDetail={(recordId: number) =>
         fetchTrainingRecordDetail(token, recordId)
       }
+      onCreatePocRegistrationLink={async (
+        input: CreatePocRegistrationLinkInput,
+      ) => {
+        await createPocRegistrationLink(token, input);
+        await loadDashboard(token);
+      }}
+      onReplyToPocRequest={async (requestId, input) => {
+        await replyToPocTrainingRequest(token, requestId, input);
+        await loadDashboard(token);
+      }}
       onSignOut={handleSignOut}
       errorMessage={errorMessage}
       isLoading={isPending}

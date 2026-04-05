@@ -12,11 +12,15 @@ import {
   TemplateDetail,
   TemplateSummary,
 } from "../api";
+import { CurrentUser } from "../../auth/api";
 import { downloadTemplateDocument } from "../../../shared/export/reportExport";
+import { confirmManagedAction } from "./managementConfirm";
 
 interface TemplatesPanelProps {
+  currentUser: CurrentUser;
   labs: LabSummary[];
   templates: TemplateSummary[];
+  isReadOnly?: boolean;
   onCreateTemplate: (input: CreateTemplateInput) => Promise<void>;
   onArchiveTemplate: (template: TemplateSummary) => Promise<void>;
   onFetchTemplateDetail: (
@@ -67,8 +71,10 @@ function getDefaultReferences() {
 }
 
 export function TemplatesPanel({
+  currentUser,
   labs,
   templates,
+  isReadOnly = false,
   onCreateTemplate,
   onArchiveTemplate,
   onFetchTemplateDetail,
@@ -227,12 +233,14 @@ export function TemplatesPanel({
     event.preventDefault();
     setFormMessage(null);
 
-    const confirmed = window.confirm(
+    const confirmed = confirmManagedAction(
+      currentUser,
       `Create template "${name}" for ${
         selectedLab
           ? `${selectedLab.department_name} / ${selectedLab.name}`
           : "the selected training unit"
-      }?`
+      }?`,
+      "Please confirm again to create this template."
     );
 
     if (!confirmed) {
@@ -737,7 +745,7 @@ export function TemplatesPanel({
 
   return (
     <>
-      {isExpandedEditorOpen ? (
+      {isExpandedEditorOpen && !isReadOnly ? (
         <div className="template-editor-overlay" role="dialog" aria-modal="true">
           <div className="template-editor-modal panel-card">
             <div className="panel-heading-row">
@@ -758,40 +766,52 @@ export function TemplatesPanel({
         </div>
       ) : null}
       <section className="columns is-multiline">
-      <div className="column is-5-desktop">
-        <section className="panel-card">
-          <div className="panel-heading-row">
-            <div>
-              <p className="panel-kicker">Template setup</p>
-              <h2 className="title is-5">Create section template</h2>
+      {!isReadOnly ? (
+        <div className="column is-5-desktop">
+          <section className="panel-card">
+            <div className="panel-heading-row">
+              <div>
+                <p className="panel-kicker">Template setup</p>
+                <h2 className="title is-5">Create section template</h2>
+              </div>
+              <div className="panel-heading-actions">
+                <button
+                  className="button is-light is-small"
+                  type="button"
+                  onClick={() => setIsExpandedEditorOpen(true)}
+                >
+                  Open full editor
+                </button>
+                <span className="tag is-info is-light">{labs.length} labs</span>
+              </div>
             </div>
-            <div className="panel-heading-actions">
-              <button
-                className="button is-light is-small"
-                type="button"
-                onClick={() => setIsExpandedEditorOpen(true)}
-              >
-                Open full editor
-              </button>
-              <span className="tag is-info is-light">{labs.length} labs</span>
-            </div>
-          </div>
 
-          {renderTemplateSetupForm()}
-        </section>
-      </div>
+            {renderTemplateSetupForm()}
+          </section>
+        </div>
+      ) : null}
 
-      <div className="column is-7-desktop">
+      <div className={isReadOnly ? "column is-12" : "column is-7-desktop"}>
         <section className="panel-card">
           <div className="panel-heading-row">
             <div>
               <p className="panel-kicker">Form library</p>
-              <h2 className="title is-5">Template library</h2>
+              <h2 className="title is-5">
+                {isReadOnly ? "Template library view" : "Template library"}
+              </h2>
             </div>
             <span className="tag is-info is-light">
               {filteredTemplates.length}
             </span>
           </div>
+
+          {isReadOnly ? (
+            <p className="mini-note mb-4">
+              Global admins can review template coverage here, but template
+              creation and updates stay with local admin / training coordinator
+              accounts.
+            </p>
+          ) : null}
 
           {printMessage ? <p className="mini-note">{printMessage}</p> : null}
 
@@ -829,15 +849,17 @@ export function TemplatesPanel({
                   </div>
 
                   <div className="tag-stack">
-                    {template.is_active ? (
+                    {template.is_active && !isReadOnly ? (
                       <button
                         className="button is-danger is-light is-small"
                         type="button"
                         onClick={() => {
                           setPrintMessage(null);
 
-                          const confirmed = window.confirm(
-                            `Archive template \"${template.name}\"? It will stay in the system for record history but stop appearing as an active template.`
+                          const confirmed = confirmManagedAction(
+                            currentUser,
+                            `Archive template "${template.name}"? It will stay in the system for record history but stop appearing as an active template.`,
+                            "Please confirm again to archive this template."
                           );
 
                           if (!confirmed) {

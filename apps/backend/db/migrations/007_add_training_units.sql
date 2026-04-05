@@ -52,6 +52,45 @@ SET training_unit_id = (
 WHERE t.training_unit_id IS NULL
   AND t.lab_id IS NOT NULL;
 
+UPDATE templates t
+SET training_unit_id = COALESCE(
+      (
+        SELECT tu.id
+        FROM training_units tu
+        INNER JOIN labs l ON l.id = tu.lab_id
+        INNER JOIN users u ON u.hospital_id = l.hospital_id
+        WHERE u.id = t.created_by
+        ORDER BY l.is_poc ASC, l.id ASC, tu.id ASC
+        LIMIT 1
+      ),
+      (
+        SELECT tu.id
+        FROM training_units tu
+        INNER JOIN labs l ON l.id = tu.lab_id
+        ORDER BY l.is_poc ASC, l.id ASC, tu.id ASC
+        LIMIT 1
+      )
+    ),
+    lab_id = COALESCE(
+      (
+        SELECT tu.lab_id
+        FROM training_units tu
+        INNER JOIN labs l ON l.id = tu.lab_id
+        INNER JOIN users u ON u.hospital_id = l.hospital_id
+        WHERE u.id = t.created_by
+        ORDER BY l.is_poc ASC, l.id ASC, tu.id ASC
+        LIMIT 1
+      ),
+      (
+        SELECT tu.lab_id
+        FROM training_units tu
+        INNER JOIN labs l ON l.id = tu.lab_id
+        ORDER BY l.is_poc ASC, l.id ASC, tu.id ASC
+        LIMIT 1
+      )
+    )
+WHERE t.training_unit_id IS NULL;
+
 ALTER TABLE training_assignments
 ADD COLUMN IF NOT EXISTS training_unit_id INTEGER REFERENCES training_units(id) ON DELETE RESTRICT;
 

@@ -215,6 +215,23 @@ function sanitizeParagraphValue(value: string | number | null | undefined) {
   return normalizedValue || "Not set";
 }
 
+function sanitizeDocumentValue(value: unknown): string {
+  if (value == null) {
+    return "Not set";
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+
+  if (typeof value === "number" || typeof value === "string") {
+    const normalizedValue = String(value).trim();
+    return normalizedValue || "Not set";
+  }
+
+  return JSON.stringify(value, null, 2);
+}
+
 function createParagraph(text: string, style = "BodyText") {
   const chunks = text.split("\n");
 
@@ -246,6 +263,132 @@ function createDetailParagraph(detail: DocumentDetail) {
 
 function createSectionHeading(title: string) {
   return createParagraph(title, "Heading1");
+}
+
+function createBulletList(
+  title: string,
+  items: Array<string | number | null | undefined>
+) {
+  const normalizedItems = items
+    .map((item) => sanitizeDocumentValue(item))
+    .filter((item) => item !== "Not set");
+
+  return `
+    ${createSectionHeading(title)}
+    ${
+      normalizedItems.length > 0
+        ? normalizedItems
+            .map((item) => createParagraph(`- ${item}`, "BodyText"))
+            .join("")
+        : createParagraph("No entries recorded.", "BodyText")
+    }
+  `;
+}
+
+function formatDocumentLabel(label: string) {
+  return label
+    .replaceAll(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function isRecordObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function createObjectValueSummary(value: Record<string, unknown>) {
+  return Object.entries(value)
+    .map(([key, nestedValue]) => {
+      if (Array.isArray(nestedValue)) {
+        return `${formatDocumentLabel(key)}: ${nestedValue
+          .map((item) => sanitizeDocumentValue(item))
+          .join(", ")}`;
+      }
+
+      if (isRecordObject(nestedValue)) {
+        return `${formatDocumentLabel(key)}: ${Object.entries(nestedValue)
+          .map(
+            ([nestedKey, childValue]) =>
+              `${formatDocumentLabel(nestedKey)} ${sanitizeDocumentValue(
+                childValue
+              )}`
+          )
+          .join(", ")}`;
+      }
+
+      return `${formatDocumentLabel(key)}: ${sanitizeDocumentValue(nestedValue)}`;
+    })
+    .join("\n");
+}
+
+function buildStructuredValueXml(
+  label: string,
+  value: unknown,
+  depth = 1
+): string {
+  const headingStyle = depth <= 1 ? "Heading1" : "BodyText";
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return createLabelValueTable(label, [["Value", "Not set"]]);
+    }
+
+    const allObjects = value.every((item) => isRecordObject(item));
+
+    if (allObjects) {
+      const columns = Array.from(
+        new Set(
+          value.flatMap((item) => Object.keys(item as Record<string, unknown>))
+        )
+      );
+
+      return createTable({
+        title: label,
+        columns: columns.map((column) => formatDocumentLabel(column)),
+        rows: value.map((item) =>
+          columns.map((column) =>
+            sanitizeDocumentValue((item as Record<string, unknown>)[column])
+          )
+        ),
+      });
+    }
+
+    return createBulletList(
+      label,
+      value.map((item) =>
+        isRecordObject(item) ? createObjectValueSummary(item) : sanitizeDocumentValue(item)
+      )
+    );
+  }
+
+  if (isRecordObject(value)) {
+    const scalarRows = Object.entries(value)
+      .filter(([, nestedValue]) => !Array.isArray(nestedValue) && !isRecordObject(nestedValue))
+      .map(([key, nestedValue]) => [
+        formatDocumentLabel(key),
+        sanitizeDocumentValue(nestedValue),
+      ] as [string, string]);
+
+    const nestedEntries = Object.entries(value).filter(
+      ([, nestedValue]) => Array.isArray(nestedValue) || isRecordObject(nestedValue)
+    );
+
+    return `
+      ${createParagraph(label, headingStyle)}
+      ${
+        scalarRows.length > 0
+          ? createLabelValueTable("Details", scalarRows)
+          : createParagraph("No summary fields recorded.", "BodyText")
+      }
+      ${nestedEntries
+        .map(([key, nestedValue]) =>
+          buildStructuredValueXml(formatDocumentLabel(key), nestedValue, depth + 1)
+        )
+        .join("")}
+    `;
+  }
+
+  return createLabelValueTable(label, [["Value", sanitizeDocumentValue(value)]]);
 }
 
 function createLabelValueTable(
@@ -358,6 +501,31 @@ function buildTemplateSchemaXml(schemaJson: Record<string, unknown>) {
         `;
       }
 
+      if (
+        [
+          "overview",
+          "pre_analytics",
+          "analysis",
+          "post_analytics",
+          "maintenance",
+        ].includes(section.type ?? "")
+      ) {
+        const heading =
+          typeof section.heading === "string" && section.heading.trim()
+            ? section.heading
+            : formatDocumentLabel(section.type ?? "Section");
+        const checklistItems = Array.isArray(section.checklistItems)
+          ? section.checklistItems
+          : [];
+
+        return createBulletList(heading, checklistItems);
+      }
+
+      if (section.type === "reference_documents") {
+        const documents = Array.isArray(section.documents) ? section.documents : [];
+        return createBulletList("Reference documents", documents);
+      }
+
       if (section.type === "training_methods_and_materials") {
         const methods = Array.isArray(section.trainingMethods)
           ? section.trainingMethods.join("\n")
@@ -375,12 +543,14 @@ function buildTemplateSchemaXml(schemaJson: Record<string, unknown>) {
       }
 
       return `
-        ${createSectionHeading(
+        ${buildStructuredValueXml(
           `Additional form section ${index + 1}: ${
-            section.type || "Custom section"
-          }`
+            typeof section.heading === "string" && section.heading.trim()
+              ? section.heading
+              : formatDocumentLabel(section.type || "Custom section")
+          }`,
+          section
         )}
-        ${createParagraph(JSON.stringify(section, null, 2), "BodyText")}
       `;
     })
     .join("");
@@ -482,8 +652,7 @@ function buildDocumentXml(options: {
 
   const jsonXml = options.jsonPayload
     ? `
-      ${createParagraph("Structured payload", "Heading1")}
-      ${createParagraph(JSON.stringify(options.jsonPayload, null, 2), "BodyText")}
+      ${buildStructuredValueXml("Assessment summary", options.jsonPayload)}
     `
     : "";
 

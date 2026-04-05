@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { Role } from "shared-types";
 
 import { findUserById } from "./user-service";
 
@@ -45,7 +46,8 @@ export async function getHospitalAccessScope(
 
   return {
     homeHospitalId: requester.hospital_id,
-    canAccessAllHospitals: false,
+    canAccessAllHospitals:
+      requester.role === Role.ADMIN && requester.is_global_admin,
     canAccessCrossHospitalPoc:
       pocAccessResult.rows[0]?.has_poc_access ?? false,
     trainingUnitIds: trainingUnitResult.rows.map(

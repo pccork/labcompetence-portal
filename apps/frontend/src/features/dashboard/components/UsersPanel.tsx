@@ -12,6 +12,8 @@ import {
   HospitalSummary,
   UserSummary,
 } from "../api";
+import { confirmManagedAction } from "./managementConfirm";
+import { getRoleDisplayLabel } from "./roleLabels";
 
 interface UsersPanelProps {
   currentUser: CurrentUser;
@@ -31,7 +33,7 @@ interface UsersPanelProps {
 const roleOptions = [
   { value: "staff", label: "Staff" },
   { value: "trainer", label: "Trainer" },
-  { value: "admin", label: "Training Co-ordinator / Admin" },
+  { value: "admin", label: "Local admin / Training coordinator" },
 ];
 
 const staffTypeOptions = [
@@ -156,6 +158,21 @@ export function UsersPanel({
               event.preventDefault();
               setFormMessage(null);
 
+              const selectedHospital = hospitals.find(
+                (hospital) => hospital.id === hospitalId
+              );
+              const confirmed = confirmManagedAction(
+                currentUser,
+                `Create user "${name}" in ${
+                  selectedHospital?.name || "the selected hospital"
+                }?`,
+                "Please confirm again to create this user account."
+              );
+
+              if (!confirmed) {
+                return;
+              }
+
               startTransition(() => {
                 void onCreateUser({
                   hospitalId,
@@ -247,7 +264,7 @@ export function UsersPanel({
 
             <div className="field">
               <label className="label" htmlFor="user-role">
-                Permission role
+                Account responsibility
               </label>
               <div className="select is-fullwidth">
                 <select
@@ -395,8 +412,10 @@ export function UsersPanel({
                         className="button is-danger is-light is-small"
                         type="button"
                         onClick={() => {
-                          const confirmed = window.confirm(
-                            `Archive user "${user.name}"? They will stop appearing in active user lists and will no longer be able to sign in.`
+                          const confirmed = confirmManagedAction(
+                            currentUser,
+                            `Archive user "${user.name}"? They will stop appearing in active user lists and will no longer be able to sign in.`,
+                            "Please confirm again to archive this user."
                           );
 
                           if (!confirmed) {
@@ -434,7 +453,7 @@ export function UsersPanel({
                             : "is-link"
                       } is-light`}
                     >
-                      {user.role}
+                      {getRoleDisplayLabel(user)}
                     </span>
                   </div>
                 </article>

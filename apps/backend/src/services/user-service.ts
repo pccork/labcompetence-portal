@@ -26,6 +26,7 @@ export interface SafeUser {
   email: string;
   role: Role;
   staff_type: StaffType;
+  is_global_admin: boolean;
   is_active: boolean;
   created_at: Date;
 }
@@ -37,7 +38,8 @@ export async function createUser(
   email: string,
   password: string,
   role: Role,
-  staffType: StaffType = StaffType.BASIC_GRADE_SCIENTIST
+  staffType: StaffType = StaffType.BASIC_GRADE_SCIENTIST,
+  isGlobalAdmin = false
 ) {
   const hashed = await bcrypt.hash(password, 10);
 
@@ -51,10 +53,11 @@ export async function createUser(
         password,
         role,
         staff_type,
+        is_global_admin,
         is_active
       )
-      VALUES ($1, $2, $3, $4, $5, $6, true)
-      RETURNING id, hospital_id, name, email, role, staff_type, is_active, created_at
+      VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+      RETURNING id, hospital_id, name, email, role, staff_type, is_global_admin, is_active, created_at
     )
     SELECT
       inserted_user.id,
@@ -64,12 +67,13 @@ export async function createUser(
       inserted_user.email,
       inserted_user.role,
       inserted_user.staff_type,
+      inserted_user.is_global_admin,
       inserted_user.is_active,
       inserted_user.created_at
     FROM inserted_user
     INNER JOIN hospitals h ON h.id = inserted_user.hospital_id
     `,
-    [hospitalId, name, email, hashed, role, staffType]
+    [hospitalId, name, email, hashed, role, staffType, isGlobalAdmin]
   );
 
   return result.rows[0];
@@ -95,6 +99,7 @@ export async function findUserById(db: Pool, id: number) {
       u.email,
       u.role,
       u.staff_type,
+      u.is_global_admin,
       u.is_active,
       u.created_at
     FROM users u
@@ -118,6 +123,7 @@ export async function listUsers(db: Pool, hospitalId?: number) {
       u.email,
       u.role,
       u.staff_type,
+      u.is_global_admin,
       u.is_active,
       u.created_at
     FROM users u
@@ -138,12 +144,17 @@ export async function listUsersForRequester(
     hospitalId?: number | undefined;
     requesterId: number;
     requesterRole: Role;
+    canAccessAllHospitals: boolean;
     trainingUnitIds: number[];
   }
 ) {
   if (input.requesterRole === Role.STAFF) {
     const requester = await findUserById(db, input.requesterId);
     return requester ? [requester] : [];
+  }
+
+  if (input.canAccessAllHospitals) {
+    return listUsers(db, input.hospitalId);
   }
 
   const result = await db.query<SafeUser>(
@@ -156,6 +167,7 @@ export async function listUsersForRequester(
       u.email,
       u.role,
       u.staff_type,
+      u.is_global_admin,
       u.is_active,
       u.created_at
     FROM users u
@@ -189,7 +201,8 @@ export async function updateUser(
   name: string,
   email: string,
   role: Role,
-  staffType: StaffType = StaffType.BASIC_GRADE_SCIENTIST
+  staffType: StaffType = StaffType.BASIC_GRADE_SCIENTIST,
+  isGlobalAdmin = false
 ) {
   const result = await db.query<SafeUser>(
     `
@@ -200,9 +213,10 @@ export async function updateUser(
         name = $3,
         email = $4,
         role = $5,
-        staff_type = $6
+        staff_type = $6,
+        is_global_admin = $7
       WHERE id = $1
-      RETURNING id, hospital_id, name, email, role, staff_type, is_active, created_at
+      RETURNING id, hospital_id, name, email, role, staff_type, is_global_admin, is_active, created_at
     )
     SELECT
       updated_user.id,
@@ -212,12 +226,13 @@ export async function updateUser(
       updated_user.email,
       updated_user.role,
       updated_user.staff_type,
+      updated_user.is_global_admin,
       updated_user.is_active,
       updated_user.created_at
     FROM updated_user
     INNER JOIN hospitals h ON h.id = updated_user.hospital_id
     `,
-    [id, hospitalId, name, email, role, staffType]
+    [id, hospitalId, name, email, role, staffType, isGlobalAdmin]
   );
 
   return result.rows[0];
@@ -256,7 +271,7 @@ export async function archiveUser(db: Pool, id: number) {
       UPDATE users
       SET is_active = false
       WHERE id = $1
-      RETURNING id, hospital_id, name, email, role, staff_type, is_active, created_at
+      RETURNING id, hospital_id, name, email, role, staff_type, is_global_admin, is_active, created_at
     )
     SELECT
       archived_user.id,
@@ -266,6 +281,7 @@ export async function archiveUser(db: Pool, id: number) {
       archived_user.email,
       archived_user.role,
       archived_user.staff_type,
+      archived_user.is_global_admin,
       archived_user.is_active,
       archived_user.created_at
     FROM archived_user
@@ -290,7 +306,7 @@ export async function updateUserPassword(
       UPDATE users
       SET password = $2
       WHERE id = $1
-      RETURNING id, hospital_id, name, email, role, staff_type, is_active, created_at
+      RETURNING id, hospital_id, name, email, role, staff_type, is_global_admin, is_active, created_at
     )
     SELECT
       updated_user.id,
@@ -300,6 +316,7 @@ export async function updateUserPassword(
       updated_user.email,
       updated_user.role,
       updated_user.staff_type,
+      updated_user.is_global_admin,
       updated_user.is_active,
       updated_user.created_at
     FROM updated_user

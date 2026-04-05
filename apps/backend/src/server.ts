@@ -4,6 +4,7 @@ import Fastify from "fastify";
 import { env } from "./config/env";
 import postgresPlugin from "./plugins/postgres";
 import authPlugin from "./plugins/auth";
+import emailPlugin from "./plugins/email";
 import authRoutes from "./routes/auth";
 import hospitalRoutes from "./routes/hospitals";
 import labRoutes from "./routes/labs";
@@ -24,9 +25,11 @@ export async function buildServer() {
 
   await app.register(cors, {
     origin: ["http://localhost:5173"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
   await app.register(postgresPlugin);
   await app.register(authPlugin);
+  await app.register(emailPlugin);
   await app.register(authRoutes);
   await app.register(hospitalRoutes);
   await app.register(userRoutes);
