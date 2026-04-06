@@ -45,8 +45,9 @@ services:
       - key: PRIVATE_SEED_FILE
         value: /etc/secrets/private-seed.json
 
-  - type: static
+  - type: web
     name: labcompetence-frontend
+    runtime: static
     rootDir: .
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter frontend build
     staticPublishPath: apps/frontend/dist
