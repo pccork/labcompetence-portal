@@ -34,6 +34,7 @@ export async function buildServer() {
   await app.register(cors, {
     origin: getAllowedOrigins(),
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   });
   await app.register(postgresPlugin);
   await app.register(authPlugin);

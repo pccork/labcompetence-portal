@@ -10,10 +10,21 @@ export async function apiRequest<T>(
   options: RequestInit = {},
   token?: string | null
 ) {
+  const shouldSendJsonContentType =
+    options.body !== undefined &&
+    options.body !== null &&
+    !(
+      options.body instanceof FormData ||
+      options.body instanceof URLSearchParams ||
+      options.body instanceof Blob
+    );
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
-      "Content-Type": "application/json",
+      ...(shouldSendJsonContentType
+        ? { "Content-Type": "application/json" }
+        : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
