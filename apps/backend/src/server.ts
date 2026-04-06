@@ -16,14 +16,28 @@ import userLabRoutes from "./routes/user-labs";
 import userRoutes from "./routes/users";
 import { Role } from "shared-types";
 
-function getAllowedOrigins() {
-  const origins = new Set<string>(["http://localhost:5173"]);
-
-  if (env.APP_BASE_URL) {
-    origins.add(new URL(env.APP_BASE_URL).origin);
+function isAllowedOrigin(origin?: string) {
+  if (!origin) {
+    return true;
   }
 
-  return Array.from(origins);
+  if (origin === "http://localhost:5173") {
+    return true;
+  }
+
+  if (env.APP_BASE_URL) {
+    try {
+      if (origin === new URL(env.APP_BASE_URL).origin) {
+        return true;
+      }
+    } catch {
+      // Ignore invalid APP_BASE_URL values and fall through to other checks.
+    }
+  }
+
+  return /^https:\/\/labcompetence-frontend(?:-[a-z0-9]+)?\.onrender\.com$/i.test(
+    origin,
+  );
 }
 
 export async function buildServer() {
@@ -32,7 +46,9 @@ export async function buildServer() {
   });
 
   await app.register(cors, {
-    origin: getAllowedOrigins(),
+    origin: (origin, callback) => {
+      callback(null, isAllowedOrigin(origin));
+    },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   });
