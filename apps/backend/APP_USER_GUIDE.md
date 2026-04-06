@@ -29,6 +29,71 @@ The app is designed around three main working groups:
 
 Point of Care (POC) users are also supported through QR-code training requests, especially for medical and nursing staff who may not belong to the main lab team.
 
+## RBAC And Scope
+
+The app currently uses three base roles in code:
+
+- `staff`
+- `trainer`
+- `admin`
+
+There is also an important admin scope flag:
+
+- `admin + is_global_admin = true`: global admin
+- `admin + is_global_admin = false`: local admin / training coordinator
+
+### What Each Role Means
+
+- **Staff**
+  Can log in, see their own hospital-scoped data, review their own assignments and records, and use the dashboard mainly as a personal training tracker.
+
+- **Trainer**
+  Can log in, see scoped users/templates/sections/assignments/records for their allowed hospital or POCT scope, and review training activity. In the current implementation, trainer visibility is broader than trainer write access.
+
+- **Local Admin / Training Coordinator**
+  Can manage the operational workflow for one hospital or one scoped POCT area. This is the main day-to-day management role for creating users, templates, assignments, records, and POCT responses inside the allowed scope.
+
+- **Global Admin**
+  Can manage system-wide organisation setup such as hospitals and cross-hospital user administration. In the current UI, this role is intentionally more structural and less workflow-focused.
+
+### Current Feature Matrix
+
+This section reflects the current frontend and backend implementation.
+
+| Area / Action | Staff | Trainer | Local Admin | Global Admin |
+| --- | --- | --- | --- | --- |
+| Sign in and load dashboard | Yes | Yes | Yes | Yes |
+| View hospitals in scope | Yes | Yes | Yes | Yes |
+| View users in scope | Yes | Yes | Yes | Yes |
+| Create users | No | No | Yes | Yes |
+| Archive users | No | No | Yes | Yes |
+| Reset passwords by admin endpoint | No | No | Yes | Yes |
+| View sections in scope | Yes | Yes | Yes | Yes |
+| Create sections | No | No | Yes | Yes |
+| Update/delete sections | No | No | No | Global admin only |
+| View templates in scope | Yes | Yes | Yes | Yes |
+| Create templates | No | No | Yes | No |
+| Create new template versions | No | No | Yes | No |
+| View assignments in scope | Own only | Yes | Yes | Not loaded in current UI |
+| Create/update assignments | No | No | Yes | No |
+| View training records in scope | Own only | Yes | Yes | Not loaded in current UI |
+| Create training records | Yes, if within allowed scope | Yes, if within allowed scope | Yes | No |
+| View POCT registration links | No | No | Yes | No |
+| Create POCT registration links | No | No | Yes | No |
+| View POCT training requests | No | No | Yes | No |
+| Reply to POCT training requests | No | No | Yes | No |
+| Create hospitals | No | No | No | Yes |
+| Update/delete hospitals | No | No | No | Yes |
+
+### Important Scope Rules
+
+- Most users are limited to their home hospital.
+- Global admins can access all hospitals.
+- POCT can support a controlled cross-hospital exception when the user is assigned to POCT training units.
+- Staff can only see their own assignments and training records.
+- Template editing is currently reserved to local admin / training coordinator accounts, not trainers.
+- Global admins can view templates across the estate, but template editing/versioning is intentionally blocked for them in the current backend.
+
 ## How The App Is Organised
 
 The dashboard is organised into these main areas:
@@ -50,6 +115,104 @@ The dashboard is organised into these main areas:
 
 - **Sections**
   View lab sections/instruments and filter the dashboard by section.
+
+## Dashboard Walkthrough
+
+This section explains the main dashboard areas in plain language.
+
+### Overview
+
+The overview is the landing area after login.
+
+- For local admin or training coordinator accounts, it combines metrics with the main operational panels.
+- For POCT-only local coordinators, it shows a POCT-focused overview with due items, expiring records, trainer coverage, and section snapshots.
+- For global admins, it becomes a system-wide hospital setup view instead of a training workflow view.
+
+### Users
+
+The **Users** area is the staff directory and account setup area.
+
+Main functions:
+
+- create a user account
+- choose hospital, role, and staff type
+- separate the directory into core lab staff and POCT users
+- filter by staff type
+- search by name, email, or hospital
+- archive users when needed
+
+### Due Training
+
+The **Due training** area is the assignment planner.
+
+Main functions:
+
+- create a new training assignment
+- match templates to a user based on `staff_type`
+- set renewal interval in months
+- set the next due date
+- search the assignment list
+- export assignment reports
+
+This panel is designed for planning and reminder-style oversight rather than detailed signoff.
+
+### Templates
+
+The **Templates** area manages reusable digital forms.
+
+Main functions:
+
+- create a section template
+- choose target staff type
+- choose template kind such as competency-only or POCT checklist
+- generate the JSON schema for the form structure
+- review template versions
+- print/export a template document
+- archive a template if it should no longer be assigned
+
+Templates describe the reusable form. They do not store trainee-specific answers.
+
+### Records
+
+The **Records** area is where the actual trainee record is created and reviewed.
+
+Main functions:
+
+- create a training record from a template version
+- link the record to a trainee and, optionally, a training assignment
+- assign trainer/reviewer
+- set scheduled, completed, signed, and expiry dates
+- capture specimen evidence
+- store structured assessment notes in JSON
+- export a record document
+
+This is where evidence and signoff history live.
+
+### Section Setup
+
+The **Section setup** or **Lab section directory** area is the section navigator.
+
+Main functions:
+
+- view available training sections
+- filter the dashboard by section
+- create a new section as a local admin
+- mark a section as POCT when required
+
+### POCT Requests
+
+The **POCT requests** area is shown for the POCT coordinator workflow.
+
+Main functions:
+
+- create QR registration links for POCT sections
+- print or copy registration links
+- group incoming requests by hospital, device, location, and status
+- filter requests by status, hospital, device, and search text
+- send trainer/coordinator replies with location, time, and a message
+- mark requests as `scheduled` or `cancelled`
+
+This area supports high-volume POCT onboarding without manually creating every user first.
 
 ## Guide For Staff / Trainees
 
@@ -87,7 +250,7 @@ For Point of Care users, the workflow can start from a QR code placed near a dev
 1. Scan the QR code for the POC section/device.
 2. Enter your name, hospital, email, and password.
 3. Submit the training request.
-4. A trainer replies with the training location, time, and any extra instructions.
+4. A co-ordinator/admin replies with the training location, time, and any extra instructions.
 5. Attend the face-to-face training session.
 6. After training, the record is updated and the POC lab assignment is created/stored in the app.
 
@@ -106,8 +269,8 @@ Typical trainer work includes:
 - checking which staff are due or overdue for training in their section
 - reviewing trainee records and specimen evidence
 - supporting competency signoff
-- responding to POC training requests with a location, time, and message
-- helping keep section templates accurate and practical
+- supporting POCT sessions after requests have been scheduled by a coordinator/admin
+- feeding back on whether templates are practical and up to date
 
 ### What Trainers Should Do
 
@@ -124,21 +287,22 @@ Typical trainer work includes:
    Where appropriate, create a training record using the correct trainee, template version, trainer/reviewer, dates, evidence, and assessment notes.
 
 5. **Use templates carefully**
-   Templates define the structure and content of a section training form. If template editing is part of your trainer role, make sure the content reflects current practice and current documents/SOPs.
+   Templates define the structure and content of a section training form. In the current implementation, template editing is handled by local admin / training coordinator accounts, so trainers should feed changes back through that workflow.
 
-### POC Trainer Workflow
+### POC Trainer Support Workflow
 
 For POC training requests:
 
 1. A user scans the QR code and submits a training request.
-2. The trainer reviews the request, including name, email, hospital, and target POC section.
-3. The trainer replies with:
+2. A local admin / training coordinator reviews the request, including name, email, hospital, and target POC section.
+3. The co-ordinator replies with:
    - training status, for example scheduled
    - location
    - time/date details
    - a message/instruction for the trainee
-4. When the request is scheduled, the trainee is linked to the POC lab training pathway.
-5. After face-to-face training, the training record should be updated to reflect completion/signoff.
+4. The trainer then delivers or supports the face-to-face session.
+5. When the request is scheduled, the trainee is linked to the POC lab training pathway.
+6. After face-to-face training, the training record should be updated to reflect completion/signoff.
 
 ### Important Note For Trainers
 
@@ -152,7 +316,8 @@ Training co-ordinators and admins manage the training system and keep the overal
 
 Main responsibilities include:
 
-- creating hospitals and lab sections
+- creating hospitals where the account is global admin
+- creating lab sections within the account's allowed scope
 - creating user accounts for ordinary lab staff, trainers, and co-ordinators
 - assigning roles and staff types
 - creating and maintaining templates
@@ -238,6 +403,15 @@ For POC sections, admins can create QR registration links tied to a POC lab.
 The link can include default training location and time details. A POC user scans the QR code, submits their details, and a training request is created for trainer follow-up.
 
 This avoids manually creating very large numbers of POC medical/nursing users one by one.
+
+## Notes On Current Implementation
+
+There are a few important implementation details to keep in mind before hosting:
+
+- trainer accounts currently have broad read access to scoped workflow data, but the main write actions remain admin-led
+- local admins are the main workflow owners for template creation, assignment planning, POCT request replies, and user setup
+- global admins are currently aimed at system setup, not day-to-day training record operations
+- the UI deliberately separates structure management from live workflow management to reduce accidental cross-hospital edits
 
 ## Suggested Operating Model
 

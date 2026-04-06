@@ -129,6 +129,61 @@ RESEND_API_KEY=your_resend_api_key
 This is the recommended proof-of-concept setup because API-based sending is
 simpler on Render than raw SMTP.
 
+## Microsoft Sign-In
+
+The app now supports both local email/password login and Microsoft Entra ID
+login.
+
+Backend auth environment variables:
+
+```bash
+AUTH_LOCAL_ENABLED=true
+AUTH_MICROSOFT_ENABLED=false
+MICROSOFT_TENANT_ID=
+MICROSOFT_CLIENT_ID=
+MICROSOFT_CLIENT_SECRET=
+MICROSOFT_ALLOWED_EMAIL_DOMAIN=hse.ie
+```
+
+Recommended Microsoft app registration settings:
+
+- Platform: `Web`
+- Redirect URI for local development: `http://localhost:5173/`
+- Redirect URI for production: your frontend root URL, for example `https://portal.example.com/`
+- Supported account type: the single tenant that owns your HSE organisation accounts
+- ID tokens: enabled
+- Authorization code flow: enabled
+
+How it works:
+
+- The frontend shows a `Continue with Microsoft` button when Microsoft auth is enabled.
+- The backend exchanges the Microsoft authorization code and verifies the returned ID token.
+- The verified Microsoft email is matched to an existing active user in the local database.
+- Local app roles and permissions still come from the Lab Competence Portal database.
+
+For AWS production, a typical setup is:
+
+```bash
+APP_BASE_URL=https://your-frontend-domain
+AUTH_LOCAL_ENABLED=false
+AUTH_MICROSOFT_ENABLED=true
+MICROSOFT_TENANT_ID=your-entra-tenant-id
+MICROSOFT_CLIENT_ID=your-app-client-id
+MICROSOFT_CLIENT_SECRET=your-app-client-secret
+MICROSOFT_ALLOWED_EMAIL_DOMAIN=hse.ie
+```
+
+That gives you:
+
+- local development: both Microsoft and email/password if you keep `AUTH_LOCAL_ENABLED=true`
+- AWS production: Microsoft sign-in only when `AUTH_LOCAL_ENABLED=false`
+
+Important:
+
+- Users must already exist in the app database with the same company email address, such as `peter.chuk@hse.ie`.
+- Email matching is case-insensitive.
+- If a Microsoft user is not already linked by email, sign-in is rejected.
+
 ## One-Time Database Setup
 
 If the role and database do not exist yet:
@@ -152,6 +207,22 @@ List tables:
 ```bash
 PGPASSWORD=userio58 psql -h localhost -U labuser -d labcompetence -c "\dt"
 ```
+
+## Deployment Handoff Notes
+
+For the final Render handoff, these docs are the most useful:
+
+- [APP_USER_GUIDE.md](APP_USER_GUIDE.md) for RBAC, dashboard areas, and user-facing workflow notes
+- [DATABASE_SCHEMA_README.md](DATABASE_SCHEMA_README.md) for the SQL data model and quick extension guidance
+- [HOSPITAL_SCHEMA_README.md](HOSPITAL_SCHEMA_README.md) for multi-hospital and POCT boundary design
+
+Recommended final checks before the last push:
+
+- confirm the Render plans in the repo [../render.yaml](../render.yaml)
+- confirm `APP_BASE_URL`, `JWT_SECRET`, database URL, and email settings in Render
+- run migrations and seed the initial dataset
+- verify at least one local admin account can sign in and manage templates, assignments, and records
+- verify the POCT registration link flow if POCT is part of the POC
 
 ## Private Seed Guidance
 

@@ -13,11 +13,11 @@ All demo users use the password `password123`.
 
 | Name                      | Email                             | Password    | Role    | Staff Type               | Demo Purpose                                            |
 | ------------------------- | --------------------------------- | ----------- | ------- | ------------------------ | ------------------------------------------------------- |
-| Demo Portal Admin         | portal.admin@example.test         | password123 | admin   | training_coordinator     | Anonymised global admin account                         |
-| Demo Training Coordinator | training.coordinator@example.test | password123 | admin   | training_coordinator     | Anonymised biochemistry/core-lab co-ordinator           |
-| Demo POCT Coordinator     | poct.coordinator@example.test     | password123 | admin   | training_coordinator     | Anonymised POCT-only co-ordinator for Blood Gas/Glucose |
-| Demo Section Trainer      | section.trainer@example.test      | password123 | trainer | senior_medical_scientist | Anonymised Mass Spectrometry section trainer            |
-| Demo Scientist Trainee    | scientist.trainee@example.test    | password123 | staff   | basic_grade_scientist    | Anonymised medical scientist trainee                    |
+| Demo Portal Admin         | portal.admin@example.test         | Biochem20173! | admin   | training_coordinator     | Anonymised global admin account                         |
+| Demo Training Coordinator | training.coordinator@example.test | Biochem20173! | admin   | training_coordinator     | Anonymised biochemistry/core-lab co-ordinator           |
+| Demo POCT Coordinator     | poct.coordinator@example.test     | Biochem20173! | admin   | training_coordinator     | Anonymised POCT-only co-ordinator for Blood Gas/Glucose |
+| Demo Section Trainer      | section.trainer@example.test      | Biochem20173! | trainer | senior_medical_scientist | Anonymised Mass Spectrometry section trainer            |
+| Demo Scientist Trainee    | scientist.trainee@example.test    | Biochem20173! | staff   | basic_grade_scientist    | Anonymised medical scientist trainee                    |
 
 ## Demo sections / training units
 

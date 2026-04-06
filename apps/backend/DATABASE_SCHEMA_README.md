@@ -22,6 +22,35 @@ The core design decisions are:
 - POC QR self-registration creates a `poc_training_requests` row first, not an immediate final lab assignment
 - trainer replies can schedule the training and then activate the user-to-POC-lab assignment
 
+## Relationship Map In Plain English
+
+The fastest way to understand the SQL model is to read it from organisation level down to trainee evidence:
+
+1. `hospitals`
+   One row per hospital or site.
+2. `labs`
+   Parent department or service under one hospital.
+3. `training_units`
+   Child section, bench, instrument, or device pathway under one lab.
+4. `user_training_units`
+   Join table connecting users to the training units they belong to.
+5. `templates`
+   Reusable definition of a form for one training unit.
+6. `template_versions`
+   Immutable snapshots of the template JSON over time.
+7. `training_assignments`
+   Reminder/planning rows that say a user must complete or renew a template.
+8. `training_records`
+   Actual trainee-specific records created from a template version.
+9. `training_record_specimens`
+   Optional specimen evidence rows attached to one training record.
+10. `poc_registration_links`
+   Public QR entry points for POCT pathways.
+11. `poc_training_requests`
+   Incoming request-first rows for POCT trainees before or during scheduling.
+
+If you keep those layers in mind, the model becomes much easier to extend.
+
 ## Table-by-Table Schema
 
 ## `hospitals`
@@ -523,3 +552,95 @@ Why this model fits the paper-to-digital transition:
 - it gives training co-ordinators and section trainers a proper due-date dashboard foundation
 - it gives each staff member their own training roadmap
 - it leaves room for future AI-generated MCQ/proficiency testing without replacing the relational core
+## Why This Model Makes New Features Quicker
+
+The current structure is deliberately arranged so new functions usually fit into one of two places:
+
+- add a new SQL query, filter, or endpoint over existing relational tables
+- add a new JSON block inside `template_versions.schema_json` or `training_records.assessment_payload_json`
+
+This means we usually do **not** need:
+
+- a brand-new SQL table for every paper form
+- separate apps for core lab and POCT
+- duplicated trainee identity fields on templates
+
+That design makes future changes faster because the core joins stay stable:
+
+- hospital filtering starts at `users.hospital_id` or `labs.hospital_id`
+- section filtering starts at `training_units` and `user_training_units`
+- template filtering starts at `templates.target_staff_type`, `template_kind`, or `is_active`
+- reminder filtering starts at `training_assignments.next_due_at` or `training_records.expires_at`
+- POCT filtering starts at `labs.is_poc`
+
+## How To Think About New Filters
+
+Most new filters can be added quickly because the list endpoints already return denormalised summary rows.
+
+Common examples:
+
+- **Filter by hospital**
+  Join through `users.hospital_id` for trainee ownership or `labs.hospital_id` for section ownership.
+
+- **Filter by department or section**
+  Use `training_units.lab_id` or the returned `department_id` and `lab_id` fields from the list queries.
+
+- **Filter by staff category**
+  Use `users.staff_type` for trainee category or `templates.target_staff_type` for template applicability.
+
+- **Filter by due / expiry window**
+  Use `training_assignments.next_due_at` or `training_records.expires_at`.
+
+- **Filter POCT versus non-POCT**
+  Use `labs.is_poc`.
+
+- **Filter active versus archived**
+  Use `users.is_active`, `templates.is_active`, or `training_assignments.is_active`.
+
+Because the app already exposes these summary fields in the dashboard APIs, many future UI filters should only require:
+
+1. adding a query parameter or frontend filter control
+2. extending the SQL `WHERE` clause in one service
+3. returning the same summary shape
+
+## How To Think About New Functions
+
+Most future functions naturally fit one of these extension paths:
+
+- **New report**
+  Usually built from existing assignment or record list queries plus export formatting.
+
+- **New reminder rule**
+  Usually built from date logic on `training_assignments` or `training_records`.
+
+- **New form type**
+  Usually built by extending `template_versions.schema_json` with another block type instead of creating another table.
+
+- **New evidence type**
+  Can go into `training_record_specimens` if row-based, or `assessment_payload_json` if it is structured form data.
+
+- **New role-aware dashboard view**
+  Usually built from the same list endpoints with an additional scope filter or metric aggregate.
+
+- **New POCT workflow step**
+  Usually built from `poc_training_requests` plus status transitions, rather than creating a separate POCT-only schema.
+
+## Practical Query Starting Points
+
+If a new feature needs to be added quickly, these are the best starting anchors:
+
+- `users` for identity, role, staff type, and home hospital
+- `user_training_units` for section membership and scoped access
+- `templates` and `template_versions` for reusable form logic
+- `training_assignments` for due-date planning
+- `training_records` for compliance evidence and audit output
+- `poc_training_requests` for intake and scheduling workflows
+
+In practice, that means a new filter or report should usually begin by asking:
+
+- Is this about **who the person is**? Start from `users`.
+- Is this about **where they work/train**? Start from `training_units` and `user_training_units`.
+- Is this about **what form applies**? Start from `templates`.
+- Is this about **what is due**? Start from `training_assignments`.
+- Is this about **what was completed**? Start from `training_records`.
+- Is this about **public POCT intake**? Start from `poc_training_requests`.
