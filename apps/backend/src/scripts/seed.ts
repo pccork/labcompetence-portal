@@ -11,7 +11,7 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-const demoPassword = "password123";
+const demoPassword = "Biochem20173!";
 const privateSeedEnabled = process.env.ENABLE_PRIVATE_SEED === "true";
 const privateSeedFilePath = process.env.PRIVATE_SEED_FILE
   ? path.resolve(process.env.PRIVATE_SEED_FILE)

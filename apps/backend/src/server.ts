@@ -16,7 +16,15 @@ import userLabRoutes from "./routes/user-labs";
 import userRoutes from "./routes/users";
 import { Role } from "shared-types";
 
+function getAllowedOrigins() {
+  const origins = new Set<string>(["http://localhost:5173"]);
 
+  if (env.APP_BASE_URL) {
+    origins.add(new URL(env.APP_BASE_URL).origin);
+  }
+
+  return Array.from(origins);
+}
 
 export async function buildServer() {
   const app = Fastify({
@@ -24,7 +32,7 @@ export async function buildServer() {
   });
 
   await app.register(cors, {
-    origin: ["http://localhost:5173"],
+    origin: getAllowedOrigins(),
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
   await app.register(postgresPlugin);

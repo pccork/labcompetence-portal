@@ -9,7 +9,7 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-const DEMO_PASSWORD = "password123";
+const DEMO_PASSWORD = "Biochem20173!";
 const DUMMY_POCT_COORDINATOR = {
   name: "Demo POCT Coordinator",
   email: "poct.coordinator@test.com",

@@ -31,6 +31,10 @@ export interface SafeUser {
   created_at: Date;
 }
 
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
 export async function createUser(
   db: Pool | PoolClient,
   hospitalId: number,
@@ -73,7 +77,15 @@ export async function createUser(
     FROM inserted_user
     INNER JOIN hospitals h ON h.id = inserted_user.hospital_id
     `,
-    [hospitalId, name, email, hashed, role, staffType, isGlobalAdmin]
+    [
+      hospitalId,
+      name,
+      normalizeEmail(email),
+      hashed,
+      role,
+      staffType,
+      isGlobalAdmin,
+    ]
   );
 
   return result.rows[0];
@@ -81,8 +93,8 @@ export async function createUser(
 
 export async function findUserByEmail(db: Pool, email: string) {
   const result = await db.query(
-    "SELECT * FROM users WHERE email = $1 AND is_active = true",
-    [email]
+    "SELECT * FROM users WHERE lower(email) = $1 AND is_active = true",
+    [normalizeEmail(email)]
   );
 
   return result.rows[0];
@@ -232,7 +244,15 @@ export async function updateUser(
     FROM updated_user
     INNER JOIN hospitals h ON h.id = updated_user.hospital_id
     `,
-    [id, hospitalId, name, email, role, staffType, isGlobalAdmin]
+    [
+      id,
+      hospitalId,
+      name,
+      normalizeEmail(email),
+      role,
+      staffType,
+      isGlobalAdmin,
+    ]
   );
 
   return result.rows[0];

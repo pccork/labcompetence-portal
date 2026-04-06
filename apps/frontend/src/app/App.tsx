@@ -1,7 +1,19 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 
-import { CurrentUser, fetchCurrentUser, loginUser } from "../features/auth/api";
+import {
+  AuthProvidersConfig,
+  CurrentUser,
+  fetchAuthProvidersConfig,
+  fetchCurrentUser,
+  loginUser,
+  loginWithMicrosoftCode,
+} from "../features/auth/api";
 import { LoginPanel } from "../features/auth/LoginPanel";
+import {
+  beginMicrosoftLogin,
+  clearPendingMicrosoftAuth,
+  getPendingMicrosoftAuth,
+} from "../features/auth/microsoftAuth";
 import {
   archiveUserAccount,
   createHospital,
@@ -49,6 +61,7 @@ export function App() {
   const pocRegistrationMatch = pathname.match(/^\/poc\/register\/([^/]+)$/);
   const registrationCode = pocRegistrationMatch?.[1] ?? null;
   const [token, setToken] = useState(() => loadSession()?.token || null);
+  const [authConfig, setAuthConfig] = useState<AuthProvidersConfig | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [labs, setLabs] = useState<LabSummary[]>([]);
   const [hospitals, setHospitals] = useState<HospitalSummary[]>([]);
@@ -65,7 +78,18 @@ export function App() {
   );
   const [records, setRecords] = useState<TrainingRecordSummary[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isMicrosoftPending, setIsMicrosoftPending] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  const clearMicrosoftCallbackParams = useCallback(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("code");
+    url.searchParams.delete("state");
+    url.searchParams.delete("session_state");
+    url.searchParams.delete("error");
+    url.searchParams.delete("error_description");
+    window.history.replaceState({}, document.title, url.toString());
+  }, []);
 
   const loadDashboard = useCallback(async (activeToken: string) => {
     setErrorMessage(null);
@@ -136,6 +160,22 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    startTransition(() => {
+      void fetchAuthProvidersConfig()
+        .then((config) => {
+          setAuthConfig(config);
+        })
+        .catch((error) => {
+          setErrorMessage(
+            error instanceof Error
+              ? error.message
+              : "Unable to load sign-in options"
+          );
+        });
+    });
+  }, []);
+
+  useEffect(() => {
     if (!token) {
       return;
     }
@@ -144,6 +184,68 @@ export function App() {
       void loadDashboard(token);
     });
   }, [loadDashboard, token]);
+
+  useEffect(() => {
+    if (token || !authConfig?.microsoft.enabled) {
+      return;
+    }
+
+    const searchParams = new URLSearchParams(window.location.search);
+    const code = searchParams.get("code");
+    const state = searchParams.get("state");
+    const authError = searchParams.get("error");
+    const authErrorDescription = searchParams.get("error_description");
+
+    if (!code && !authError) {
+      return;
+    }
+
+    if (authError) {
+      clearPendingMicrosoftAuth();
+      clearMicrosoftCallbackParams();
+      setErrorMessage(authErrorDescription || "Microsoft sign-in was cancelled");
+      return;
+    }
+
+    const pendingAuth = getPendingMicrosoftAuth();
+
+    if (!code || !state || !pendingAuth || pendingAuth.state !== state) {
+      clearPendingMicrosoftAuth();
+      clearMicrosoftCallbackParams();
+      setErrorMessage("Microsoft sign-in session could not be verified");
+      return;
+    }
+
+    setIsMicrosoftPending(true);
+    setErrorMessage(null);
+
+    startTransition(() => {
+      void loginWithMicrosoftCode(
+        code,
+        pendingAuth.codeVerifier,
+        pendingAuth.redirectUri
+      )
+        .then(async (response) => {
+          setToken(response.token);
+          saveSession({ token: response.token });
+          clearPendingMicrosoftAuth();
+          clearMicrosoftCallbackParams();
+          await loadDashboard(response.token);
+        })
+        .catch((error) => {
+          clearPendingMicrosoftAuth();
+          clearMicrosoftCallbackParams();
+          setErrorMessage(
+            error instanceof Error
+              ? error.message
+              : "Unable to sign in with Microsoft"
+          );
+        })
+        .finally(() => {
+          setIsMicrosoftPending(false);
+        });
+    });
+  }, [authConfig, clearMicrosoftCallbackParams, loadDashboard, token]);
 
   const handleLogin = async (email: string, password: string) => {
     setErrorMessage(null);
@@ -160,8 +262,36 @@ export function App() {
     }
   };
 
+  const handleMicrosoftLogin = async () => {
+    if (
+      !authConfig?.microsoft.enabled ||
+      !authConfig.microsoft.clientId ||
+      !authConfig.microsoft.tenantId
+    ) {
+      throw new Error("Microsoft sign-in is not configured");
+    }
+
+    setErrorMessage(null);
+    setIsMicrosoftPending(true);
+
+    try {
+      await beginMicrosoftLogin({
+        clientId: authConfig.microsoft.clientId,
+        tenantId: authConfig.microsoft.tenantId,
+      });
+    } catch (error) {
+      setIsMicrosoftPending(false);
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to start Microsoft sign-in"
+      );
+    }
+  };
+
   const handleSignOut = () => {
     clearSession();
+    clearPendingMicrosoftAuth();
     setToken(null);
     setCurrentUser(null);
     setHospitals([]);
@@ -180,7 +310,18 @@ export function App() {
   }
 
   if (!token || !currentUser) {
-    return <LoginPanel onLogin={handleLogin} errorMessage={errorMessage} />;
+    return (
+      <LoginPanel
+        onLogin={handleLogin}
+        onMicrosoftLogin={handleMicrosoftLogin}
+        errorMessage={errorMessage}
+        localEnabled={authConfig?.local.enabled ?? false}
+        microsoftEnabled={authConfig?.microsoft.enabled ?? false}
+        microsoftEmailDomain={authConfig?.microsoft.allowedEmailDomain ?? null}
+        authConfigReady={Boolean(authConfig)}
+        isMicrosoftPending={isMicrosoftPending}
+      />
+    );
   }
 
   return (

@@ -2,12 +2,27 @@ import { useState, useTransition } from "react";
 
 interface LoginPanelProps {
   onLogin: (email: string, password: string) => Promise<void>;
+  onMicrosoftLogin: () => Promise<void>;
   errorMessage: string | null;
+  localEnabled: boolean;
+  microsoftEnabled: boolean;
+  microsoftEmailDomain?: string | null;
+  authConfigReady: boolean;
+  isMicrosoftPending?: boolean;
 }
 
-export function LoginPanel({ onLogin, errorMessage }: LoginPanelProps) {
-  const [email, setEmail] = useState("admin@test.com");
-  const [password, setPassword] = useState("password123");
+export function LoginPanel({
+  onLogin,
+  onMicrosoftLogin,
+  errorMessage,
+  localEnabled,
+  microsoftEnabled,
+  microsoftEmailDomain,
+  authConfigReady,
+  isMicrosoftPending = false,
+}: LoginPanelProps) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isPending, startTransition] = useTransition();
 
   return (
@@ -26,58 +41,100 @@ export function LoginPanel({ onLogin, errorMessage }: LoginPanelProps) {
                   section competency records.
                 </p>
 
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    startTransition(() => {
-                      void onLogin(email, password);
-                    });
-                  }}
-                >
-                  <div className="field">
-                    <label className="label" htmlFor="login-email">
-                      Email
-                    </label>
-                    <div className="control">
-                      <input
-                        id="login-email"
-                        className="input is-medium"
-                        type="email"
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                      />
-                    </div>
-                  </div>
+                {!authConfigReady ? (
+                  <p className="has-text-grey">Loading sign-in options...</p>
+                ) : null}
 
-                  <div className="field">
-                    <label className="label" htmlFor="login-password">
-                      Password
-                    </label>
-                    <div className="control">
-                      <input
-                        id="login-password"
-                        className="input is-medium"
-                        type="password"
-                        value={password}
-                        onChange={(event) => setPassword(event.target.value)}
-                      />
-                    </div>
-                  </div>
+                {microsoftEnabled ? (
+                  <>
+                    <button
+                      className={`button is-medium is-fullwidth ${
+                        isMicrosoftPending ? "is-loading" : ""
+                      }`}
+                      type="button"
+                      disabled={!authConfigReady || isPending || isMicrosoftPending}
+                      onClick={() => {
+                        startTransition(() => {
+                          void onMicrosoftLogin();
+                        });
+                      }}
+                    >
+                      Continue with Microsoft
+                    </button>
+                    {microsoftEmailDomain ? (
+                      <p className="help">
+                        Use your company Microsoft account ending in @{microsoftEmailDomain}.
+                      </p>
+                    ) : null}
+                  </>
+                ) : null}
 
-                  {errorMessage ? (
-                    <p className="help is-danger">{errorMessage}</p>
-                  ) : null}
-
-                  <button
-                    className={`button is-link is-medium is-fullwidth ${
-                      isPending ? "is-loading" : ""
-                    }`}
-                    type="submit"
-                    disabled={isPending}
+                {localEnabled ? (
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      startTransition(() => {
+                        void onLogin(email, password);
+                      });
+                    }}
                   >
-                    Enter dashboard
-                  </button>
-                </form>
+                    {microsoftEnabled ? <hr /> : null}
+
+                    <div className="field">
+                      <label className="label" htmlFor="login-email">
+                        Email
+                      </label>
+                      <div className="control">
+                        <input
+                          id="login-email"
+                          className="input is-medium"
+                          type="email"
+                          autoComplete="username"
+                          placeholder="name@company.ie"
+                          value={email}
+                          onChange={(event) => setEmail(event.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="field">
+                      <label className="label" htmlFor="login-password">
+                        Password
+                      </label>
+                      <div className="control">
+                        <input
+                          id="login-password"
+                          className="input is-medium"
+                          type="password"
+                          autoComplete="current-password"
+                          placeholder="Enter your password"
+                          value={password}
+                          onChange={(event) => setPassword(event.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      className={`button is-link is-medium is-fullwidth ${
+                        isPending ? "is-loading" : ""
+                      }`}
+                      type="submit"
+                      disabled={!authConfigReady || isPending || isMicrosoftPending}
+                    >
+                      Enter dashboard
+                    </button>
+                  </form>
+                ) : null}
+
+                {!localEnabled && !microsoftEnabled && authConfigReady ? (
+                  <p className="help is-danger">
+                    No sign-in providers are currently enabled.
+                  </p>
+                ) : null}
+
+                {errorMessage ? (
+                  <p className="help is-danger">{errorMessage}</p>
+                ) : null}
               </div>
             </div>
           </div>

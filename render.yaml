@@ -2,13 +2,13 @@ databases:
   - name: labcompetence-db
     databaseName: labcompetence
     user: labcompetence_user
-    plan: free
+    plan: basic-256mb
 
 services:
   - type: web
     name: labcompetence-backend
     runtime: node
-    plan: free
+    plan: starter
     rootDir: .
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter backend build
     startCommand: pnpm --filter backend start
