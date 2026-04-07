@@ -17,6 +17,7 @@ import {
 import {
   createPocRegistrationLink,
   findPocRegistrationLinkByCode,
+  PocTrainingRequest,
   findPocTrainingRequestById,
   listPocRegistrationLinks,
   listPocTrainingRequests,
@@ -24,6 +25,7 @@ import {
   replyToPocTrainingRequest,
   setPocRegistrationLinkStatus,
 } from "../services/poc-registration-service";
+import { withEmailDispatchGuard } from "../services/email-dispatch-service";
 
 interface RegistrationLinkParams {
   Params: {
@@ -77,6 +79,17 @@ const allowedPocSelfRegistrationStaffTypes = new Set<string>([
   StaffType.POCT_MEDICAL_NURSING,
   StaffType.POCT_SCIENTIST,
 ]);
+
+function buildPocReplyDedupeKey(request: PocTrainingRequest) {
+  return [
+    "poc_training_reply",
+    request.id,
+    request.trainer_reply_status,
+    request.training_location?.trim() || "",
+    request.training_time_details?.trim() || "",
+    request.trainer_message?.trim() || "",
+  ].join(":");
+}
 
 const pocRegistrationRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/poc/hospitals", async () => {
@@ -471,18 +484,34 @@ const pocRegistrationRoutes: FastifyPluginAsync = async (fastify) => {
         updatedRequest.trainer_reply_status ===
           PocTrainingRequestStatus.CANCELLED
       ) {
-        fastify.emailService
-          .sendTrainingRequestReplyEmail({
-            traineeName: updatedRequest.trainee_name,
-            traineeEmail: updatedRequest.trainee_email,
-            deviceName: updatedRequest.lab_name,
-            hospitalName: updatedRequest.lab_hospital_name,
+        withEmailDispatchGuard(fastify.db, {
+          dedupeKey: buildPocReplyDedupeKey(updatedRequest),
+          entityId: updatedRequest.id,
+          entityType: "poc_training_request",
+          notificationType: `poc_training_reply_${updatedRequest.trainer_reply_status}`,
+          payloadSummary: {
+            replyStatus: updatedRequest.trainer_reply_status,
             location: updatedRequest.training_location,
             timeDetails: updatedRequest.training_time_details,
-            replyStatus: updatedRequest.trainer_reply_status,
-            replyMessage: updatedRequest.trainer_message,
-            coordinatorName: updatedRequest.responder_name,
-          })
+          },
+          recipientEmail: updatedRequest.trainee_email,
+          send: () =>
+            fastify.emailService.sendTrainingRequestReplyEmail({
+              traineeName: updatedRequest.trainee_name,
+              traineeEmail: updatedRequest.trainee_email,
+              deviceName: updatedRequest.lab_name,
+              hospitalName: updatedRequest.lab_hospital_name,
+              location: updatedRequest.training_location,
+              timeDetails: updatedRequest.training_time_details,
+              replyStatus:
+                updatedRequest.trainer_reply_status ===
+                PocTrainingRequestStatus.SCHEDULED
+                  ? "scheduled"
+                  : "cancelled",
+              replyMessage: updatedRequest.trainer_message,
+              coordinatorName: updatedRequest.responder_name,
+            }),
+        })
           .catch((error) => {
             request.log.error(
               { err: error, requestId: updatedRequest.id },

@@ -21,8 +21,23 @@ export interface TrainingRequestReplyEmailInput {
   traineeName: string;
 }
 
+export interface TrainingAssignmentReminderEmailInput {
+  departmentName: string;
+  hospitalName: string;
+  nextDueAt: Date | string;
+  reminderKind: "due_soon" | "overdue";
+  templateName: string;
+  traineeEmail: string;
+  traineeName: string;
+  trainingUnitName: string;
+}
+
 export interface EmailService {
+  isConfigured(): boolean;
   sendMail(email: OutboundEmail): Promise<void>;
+  sendTrainingAssignmentReminderEmail(
+    input: TrainingAssignmentReminderEmailInput,
+  ): Promise<void>;
   sendTrainingRequestReplyEmail(
     input: TrainingRequestReplyEmailInput,
   ): Promise<void>;
@@ -51,6 +66,76 @@ function escapeHtml(value: string) {
 
 function normalizeLine(value?: string | null) {
   return value?.trim() || "To be confirmed";
+}
+
+function formatDate(value: Date | string) {
+  const parsed = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return String(value);
+  }
+
+  return parsed.toISOString().slice(0, 10);
+}
+
+function buildTrainingAssignmentReminderEmail(
+  input: TrainingAssignmentReminderEmailInput,
+  appBaseUrl?: string,
+): OutboundEmail {
+  const formattedDueDate = formatDate(input.nextDueAt);
+  const isOverdue = input.reminderKind === "overdue";
+  const subjectPrefix = isOverdue ? "Training overdue" : "Training due soon";
+  const summary = isOverdue
+    ? `Your ${input.templateName} training is overdue.`
+    : `Your ${input.templateName} training is due soon.`;
+  const guidance = isOverdue
+    ? "Please arrange completion as soon as possible."
+    : "Please arrange completion before the due date.";
+  const cta = appBaseUrl
+    ? `You can review your training in the portal here: ${appBaseUrl}`
+    : null;
+
+  const lines = [
+    `Hello ${input.traineeName},`,
+    "",
+    summary,
+    "",
+    `Training item: ${input.templateName}`,
+    `Section / device: ${input.trainingUnitName}`,
+    `Department: ${input.departmentName}`,
+    `Hospital: ${input.hospitalName}`,
+    `Due date: ${formattedDueDate}`,
+    "",
+    guidance,
+    ...(cta ? ["", cta] : []),
+  ];
+
+  return {
+    to: input.traineeEmail,
+    subject: `${subjectPrefix}: ${input.templateName}`,
+    text: lines.join("\n"),
+    html: `
+      <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #102a43;">
+        <p>${escapeHtml(`Hello ${input.traineeName},`)}</p>
+        <p>${escapeHtml(summary)}</p>
+        <table style="border-collapse: collapse; margin: 16px 0;">
+          <tbody>
+            <tr><td style="padding: 6px 12px 6px 0;"><strong>Training item</strong></td><td>${escapeHtml(input.templateName)}</td></tr>
+            <tr><td style="padding: 6px 12px 6px 0;"><strong>Section / device</strong></td><td>${escapeHtml(input.trainingUnitName)}</td></tr>
+            <tr><td style="padding: 6px 12px 6px 0;"><strong>Department</strong></td><td>${escapeHtml(input.departmentName)}</td></tr>
+            <tr><td style="padding: 6px 12px 6px 0;"><strong>Hospital</strong></td><td>${escapeHtml(input.hospitalName)}</td></tr>
+            <tr><td style="padding: 6px 12px 6px 0;"><strong>Due date</strong></td><td>${escapeHtml(formattedDueDate)}</td></tr>
+          </tbody>
+        </table>
+        <p>${escapeHtml(guidance)}</p>
+        ${
+          cta
+            ? `<p><a href="${escapeHtml(appBaseUrl || "")}">${escapeHtml(cta)}</a></p>`
+            : ""
+        }
+      </div>
+    `,
+  };
 }
 
 function buildTrainingReplyEmail(
@@ -122,7 +207,15 @@ function buildTrainingReplyEmail(
 }
 
 class DisabledEmailService implements EmailService {
+  isConfigured() {
+    return false;
+  }
+
   async sendMail(_email: OutboundEmail) {}
+
+  async sendTrainingAssignmentReminderEmail(
+    _input: TrainingAssignmentReminderEmailInput,
+  ) {}
 
   async sendTrainingRequestReplyEmail(
     _input: TrainingRequestReplyEmailInput,
@@ -157,6 +250,10 @@ class SmtpEmailService implements EmailService {
     });
   }
 
+  isConfigured() {
+    return true;
+  }
+
   async sendMail(email: OutboundEmail) {
     await this.transporter.sendMail({
       from: this.fromEmail,
@@ -165,6 +262,14 @@ class SmtpEmailService implements EmailService {
       text: email.text,
       html: email.html,
     });
+  }
+
+  async sendTrainingAssignmentReminderEmail(
+    input: TrainingAssignmentReminderEmailInput,
+  ) {
+    await this.sendMail(
+      buildTrainingAssignmentReminderEmail(input, this.appBaseUrl),
+    );
   }
 
   async sendTrainingRequestReplyEmail(input: TrainingRequestReplyEmailInput) {
@@ -178,6 +283,10 @@ class ResendEmailService implements EmailService {
     private readonly fromEmail: string,
     private readonly appBaseUrl?: string,
   ) {}
+
+  isConfigured() {
+    return true;
+  }
 
   async sendMail(email: OutboundEmail) {
     const response = await fetch("https://api.resend.com/emails", {
@@ -199,6 +308,14 @@ class ResendEmailService implements EmailService {
       const payload = await response.text();
       throw new Error(`Resend request failed: ${payload}`);
     }
+  }
+
+  async sendTrainingAssignmentReminderEmail(
+    input: TrainingAssignmentReminderEmailInput,
+  ) {
+    await this.sendMail(
+      buildTrainingAssignmentReminderEmail(input, this.appBaseUrl),
+    );
   }
 
   async sendTrainingRequestReplyEmail(input: TrainingRequestReplyEmailInput) {

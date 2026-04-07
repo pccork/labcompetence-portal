@@ -39,6 +39,10 @@ export interface TemplateAssignmentScope {
   target_staff_type: StaffType;
 }
 
+export interface TrainingAssignmentReminderCandidate extends TrainingAssignment {
+  reminder_kind: "due_soon" | "overdue";
+}
+
 const trainingAssignmentSelect = `
   SELECT
     ta.id,
@@ -158,6 +162,42 @@ export async function listTrainingAssignmentsDueWithinDays(
       includeCrossHospitalPoc,
       trainingUnitIds ?? null,
     ]
+  );
+
+  return result.rows;
+}
+
+export async function listNonPocTrainingAssignmentsForReminders(
+  db: Pool,
+  dueWithinDays: number,
+  hospitalId?: number,
+  trainingUnitIds?: number[],
+) {
+  const result = await db.query<TrainingAssignmentReminderCandidate>(
+    `
+    SELECT
+      base.*,
+      CASE
+        WHEN base.next_due_at < NOW() THEN 'overdue'
+        ELSE 'due_soon'
+      END AS reminder_kind
+    FROM (
+      ${trainingAssignmentSelect}
+    ) base
+    WHERE base.is_active = true
+      AND base.lab_is_poc = false
+      AND base.next_due_at <= NOW() + ($1::text || ' days')::interval
+      AND (
+        $2::int IS NULL
+        OR base.lab_hospital_id = $2
+      )
+      AND (
+        $3::int[] IS NULL
+        OR base.lab_id = ANY($3::int[])
+      )
+    ORDER BY base.next_due_at ASC, base.trainee_name ASC, base.template_name ASC
+    `,
+    [dueWithinDays, hospitalId ?? null, trainingUnitIds ?? null],
   );
 
   return result.rows;

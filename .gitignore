@@ -24,3 +24,4 @@ pnpm-debug.log*
 apps/backend/template-samples/*.doc
 apps/backend/template-samples/*.docx
 apps/backend/private-seed/
+docs/render-sql-cheatsheet.md

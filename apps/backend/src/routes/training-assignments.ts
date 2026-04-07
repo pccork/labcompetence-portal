@@ -17,6 +17,7 @@ import {
   updateTrainingAssignment,
 } from "../services/training-assignment-service";
 import { maybeAutoSyncPrivateSeed } from "../services/private-seed-sync-service";
+import { sendNonPocTrainingReminders } from "../services/training-reminder-service";
 
 interface CreateTrainingAssignmentBody {
   Body: {
@@ -44,6 +45,13 @@ interface UpdateTrainingAssignmentBody {
 interface DueQuery {
   Querystring: {
     days?: string;
+  };
+}
+
+interface SendReminderBody {
+  Body: {
+    dryRun?: boolean;
+    dueWithinDays?: number;
   };
 }
 
@@ -234,6 +242,65 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
 
         throw error;
       }
+    },
+  );
+
+  fastify.post<SendReminderBody>(
+    "/training-assignments/reminders/send",
+    {
+      preHandler: [fastify.authenticate, fastify.requireRole(Role.ADMIN)],
+    },
+    async (request, reply) => {
+      const dueWithinDays = Number(request.body.dueWithinDays ?? 30);
+      const emailConfigured = fastify.emailService.isConfigured();
+      // TODO: Remove this forced preview safeguard once Render email delivery
+      // is configured for the deployed environment.
+      const dryRun = request.body.dryRun === true || !emailConfigured;
+
+      if (!Number.isInteger(dueWithinDays) || dueWithinDays <= 0) {
+        return reply.status(400).send({
+          message: "Valid dueWithinDays is required",
+        });
+      }
+
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id),
+      );
+
+      if (!scope) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      const result = await sendNonPocTrainingReminders(
+        fastify.db,
+        fastify.emailService,
+        {
+          dueWithinDays,
+          dryRun,
+          ...(resolveScopedHospitalId(scope) !== undefined
+            ? { hospitalId: resolveScopedHospitalId(scope) }
+            : {}),
+          ...(!scope.canAccessAllHospitals
+            ? { trainingUnitIds: scope.trainingUnitIds }
+            : {}),
+        },
+      );
+
+      return {
+        emailDelivery: emailConfigured
+          ? {
+              configured: true,
+              mode: "active",
+            }
+          : {
+              configured: false,
+              mode: "preview_only",
+              message:
+                "Email provider disabled. Reminder run executed as preview only.",
+            },
+        reminders: result,
+      };
     },
   );
 
