@@ -32,6 +32,9 @@ interface TrainingRecordsPanelProps {
   onFetchRecordDetail: (
     recordId: number
   ) => Promise<{ record: TrainingRecordDetail }>;
+  showRecordEntry?: boolean;
+  showCompetencyRecords?: boolean;
+  onOpenFullRecordEntry?: () => void;
 }
 
 function formatDate(value: string | null) {
@@ -68,6 +71,17 @@ const statusOptions = [
   { value: "signedoff", label: "Signed off" },
 ];
 
+function buildAssessmentPayload(input: {
+  resultSummary: string;
+  traineeSignedAt: string;
+}) {
+  return {
+    trainerComments: input.resultSummary.trim() || "N/A",
+    traineeDeclarationAccepted: Boolean(input.traineeSignedAt),
+    sectionChecklist: [],
+  };
+}
+
 export function TrainingRecordsPanel({
   currentUser,
   assignments,
@@ -76,6 +90,9 @@ export function TrainingRecordsPanel({
   users,
   onCreateRecord,
   onFetchRecordDetail,
+  showRecordEntry = true,
+  showCompetencyRecords = true,
+  onOpenFullRecordEntry,
 }: TrainingRecordsPanelProps) {
   const sortedUsers = useMemo(
     () =>
@@ -115,17 +132,6 @@ export function TrainingRecordsPanel({
   const [specimenOne, setSpecimenOne] = useState("");
   const [specimenTwo, setSpecimenTwo] = useState("");
   const [resultSummary, setResultSummary] = useState("");
-  const [assessmentNotes, setAssessmentNotes] = useState(
-    JSON.stringify(
-      {
-        trainerComments: "",
-        traineeDeclarationAccepted: false,
-        sectionChecklist: [],
-      },
-      null,
-      2
-    )
-  );
   const [formMessage, setFormMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -215,16 +221,32 @@ export function TrainingRecordsPanel({
 
   return (
     <section className="columns is-multiline">
-      <div className="column is-6-desktop">
+      {showRecordEntry ? (
+      <div
+        className={
+          showCompetencyRecords ? "column is-6-desktop" : "column is-12"
+        }
+      >
         <section className="panel-card">
           <div className="panel-heading-row">
             <div>
               <p className="panel-kicker">Record entry</p>
               <h2 className="title is-5">Create training record</h2>
             </div>
-            <span className="tag is-link is-light">
-              {templates.length} templates
-            </span>
+            <div className="panel-heading-actions">
+              {onOpenFullRecordEntry ? (
+                <button
+                  className="button is-light is-small"
+                  type="button"
+                  onClick={onOpenFullRecordEntry}
+                >
+                  Open full
+                </button>
+              ) : null}
+              <span className="tag is-link is-light">
+                {templates.length} templates
+              </span>
+            </div>
           </div>
 
           <form
@@ -232,17 +254,6 @@ export function TrainingRecordsPanel({
             onSubmit={(event) => {
               event.preventDefault();
               setFormMessage(null);
-
-              let assessmentPayloadJson: Record<string, unknown>;
-
-              try {
-                assessmentPayloadJson = JSON.parse(
-                  assessmentNotes
-                ) as Record<string, unknown>;
-              } catch {
-                setFormMessage("Assessment JSON is not valid.");
-                return;
-              }
 
               const specimens = [specimenOne, specimenTwo]
                 .map((value) => value.trim())
@@ -278,7 +289,10 @@ export function TrainingRecordsPanel({
                   scheduledAt: toOptionalIso(scheduledAt),
                   completedAt: toOptionalIso(completedAt),
                   traineeSignedAt: toOptionalIso(traineeSignedAt),
-                  assessmentPayloadJson,
+                  assessmentPayloadJson: buildAssessmentPayload({
+                    resultSummary,
+                    traineeSignedAt,
+                  }),
                   specimens,
                   expiresAt: toRequiredIso(expiresAt),
                   status,
@@ -528,21 +542,6 @@ export function TrainingRecordsPanel({
               />
             </div>
 
-            <div className="field">
-              <label className="label" htmlFor="record-assessment-json">
-                Assessment JSON
-              </label>
-              <textarea
-                id="record-assessment-json"
-                className="textarea template-schema-editor"
-                value={assessmentNotes}
-                onChange={(event) =>
-                  setAssessmentNotes(event.target.value)
-                }
-                spellCheck="false"
-              />
-            </div>
-
             {formMessage ? <p className="mini-note">{formMessage}</p> : null}
 
             <button
@@ -557,8 +556,14 @@ export function TrainingRecordsPanel({
           </form>
         </section>
       </div>
+      ) : null}
 
-      <div className="column is-6-desktop">
+      {showCompetencyRecords ? (
+      <div
+        className={
+          showRecordEntry ? "column is-6-desktop" : "column is-12"
+        }
+      >
         <section className="panel-card">
           <div className="panel-heading-row">
             <div>
@@ -726,6 +731,7 @@ export function TrainingRecordsPanel({
           </div>
         </section>
       </div>
+      ) : null}
     </section>
   );
 }

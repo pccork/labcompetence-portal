@@ -23,6 +23,8 @@ interface TrainingAssignmentsPanelProps {
   users: UserSummary[];
   selectedLabName: string;
   onCreateAssignment: (input: CreateTrainingAssignmentInput) => Promise<void>;
+  showPlanner?: boolean;
+  showQueue?: boolean;
 }
 
 function formatDate(value: string) {
@@ -53,6 +55,8 @@ export function TrainingAssignmentsPanel({
   users,
   selectedLabName,
   onCreateAssignment,
+  showPlanner = true,
+  showQueue = true,
 }: TrainingAssignmentsPanelProps) {
   const trainableUsers = useMemo(
     () =>
@@ -163,7 +167,12 @@ export function TrainingAssignmentsPanel({
 
   return (
     <section className="columns is-multiline">
-      <div className="column is-5-desktop">
+      {showPlanner ? (
+      <div
+        className={
+          showQueue ? "column is-5-desktop" : "column is-12"
+        }
+      >
         <section className="panel-card">
           <div className="panel-heading-row">
             <div>
@@ -310,8 +319,14 @@ export function TrainingAssignmentsPanel({
           </form>
         </section>
       </div>
+      ) : null}
 
-      <div className="column is-7-desktop">
+      {showQueue ? (
+      <div
+        className={
+          showPlanner ? "column is-7-desktop" : "column is-12"
+        }
+      >
         <section className="panel-card">
           <div className="panel-heading-row">
             <div>
@@ -407,6 +422,7 @@ export function TrainingAssignmentsPanel({
           </div>
         </section>
       </div>
+      ) : null}
     </section>
   );
 }

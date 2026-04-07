@@ -239,6 +239,13 @@ export function DashboardShell({
     isLocalCoordinator &&
     hasPoctOnlyScope &&
     (poctLabIds.size > 0 || poctAssignments.length > 0 || poctTraineeCount > 0);
+  const isBasicGradeStandardUser =
+    currentUser.role === "staff" &&
+    currentUser.staff_type === "basic_grade_scientist";
+  const canManageLocalSetup =
+    currentUser.role === "admin" ||
+    currentUser.staff_type === "training_coordinator" ||
+    currentUser.staff_type === "senior_medical_scientist";
   const dashboardViews = currentUser.is_global_admin
     ? globalAdminViews
     : standardDashboardViews.filter((view) =>
@@ -427,37 +434,7 @@ export function DashboardShell({
                   />
                 </div>
               ) : null}
-              <div className="column is-7-desktop">
-                <TrainingAssignmentsPanel
-                  currentUser={currentUser}
-                  assignments={filteredAssignments}
-                  templates={filteredTemplates}
-                  users={users}
-                  selectedLabName={selectedLabName}
-                  onCreateAssignment={onCreateAssignment}
-                />
-              </div>
-              <div className="column is-5-desktop">
-                <LabsPanel
-                  currentUser={currentUser}
-                  hospitals={hospitals}
-                  labs={labs}
-                  selectedLabId={selectedLabId}
-                  onSelectLab={setSelectedLabId}
-                  onCreateLab={onCreateLab}
-                />
-              </div>
-              <div className="column is-6-desktop">
-                <TemplatesPanel
-                  currentUser={currentUser}
-                  labs={labs}
-                  templates={filteredTemplates}
-                  onCreateTemplate={onCreateTemplate}
-                  onArchiveTemplate={onArchiveTemplate}
-                  onFetchTemplateDetail={onFetchTemplateDetail}
-                />
-              </div>
-              <div className="column is-6-desktop">
+              <div className="column is-4-desktop">
                 <TrainingRecordsPanel
                   currentUser={currentUser}
                   assignments={filteredAssignments}
@@ -466,8 +443,102 @@ export function DashboardShell({
                   users={users}
                   onCreateRecord={onCreateRecord}
                   onFetchRecordDetail={onFetchRecordDetail}
+                  showRecordEntry={false}
+                  showCompetencyRecords
                 />
               </div>
+              <div className="column is-4-desktop">
+                <TrainingAssignmentsPanel
+                  currentUser={currentUser}
+                  assignments={filteredAssignments}
+                  templates={filteredTemplates}
+                  users={users}
+                  selectedLabName={selectedLabName}
+                  onCreateAssignment={onCreateAssignment}
+                  showPlanner={false}
+                  showQueue
+                />
+              </div>
+              <div className="column is-4-desktop">
+                <TrainingAssignmentsPanel
+                  currentUser={currentUser}
+                  assignments={filteredAssignments}
+                  templates={filteredTemplates}
+                  users={users}
+                  selectedLabName={selectedLabName}
+                  onCreateAssignment={onCreateAssignment}
+                  showPlanner
+                  showQueue={false}
+                />
+              </div>
+              <div className="column is-4-desktop">
+                <TrainingRecordsPanel
+                  currentUser={currentUser}
+                  assignments={filteredAssignments}
+                  records={filteredRecords}
+                  templates={filteredTemplates}
+                  users={users}
+                  onCreateRecord={onCreateRecord}
+                  onFetchRecordDetail={onFetchRecordDetail}
+                  showRecordEntry
+                  showCompetencyRecords={false}
+                  onOpenFullRecordEntry={() => setActiveView("records")}
+                />
+              </div>
+              <div className="column is-4-desktop">
+                <TemplatesPanel
+                  currentUser={currentUser}
+                  labs={labs}
+                  templates={filteredTemplates}
+                  isReadOnly={isBasicGradeStandardUser}
+                  showTemplateSetup={false}
+                  showFormLibrary
+                  onCreateTemplate={onCreateTemplate}
+                  onArchiveTemplate={onArchiveTemplate}
+                  onFetchTemplateDetail={onFetchTemplateDetail}
+                />
+              </div>
+              <div className="column is-4-desktop">
+                <LabsPanel
+                  currentUser={currentUser}
+                  hospitals={hospitals}
+                  labs={labs}
+                  selectedLabId={selectedLabId}
+                  onSelectLab={setSelectedLabId}
+                  onCreateLab={onCreateLab}
+                  showCreateSection={false}
+                  showLabSections
+                />
+              </div>
+              {canManageLocalSetup ? (
+                <div className="column is-6-desktop">
+                  <TemplatesPanel
+                    currentUser={currentUser}
+                    labs={labs}
+                    templates={filteredTemplates}
+                    isReadOnly={isBasicGradeStandardUser}
+                    showTemplateSetup
+                    showFormLibrary={false}
+                    onCreateTemplate={onCreateTemplate}
+                    onArchiveTemplate={onArchiveTemplate}
+                    onFetchTemplateDetail={onFetchTemplateDetail}
+                  />
+                </div>
+              ) : null}
+              {canManageLocalSetup ? (
+                <div className="column is-6-desktop">
+                  <LabsPanel
+                    currentUser={currentUser}
+                    hospitals={hospitals}
+                    labs={labs}
+                    selectedLabId={selectedLabId}
+                    onSelectLab={setSelectedLabId}
+                    onCreateLab={onCreateLab}
+                    showCreateSection
+                    showLabSections={false}
+                  />
+                </div>
+              ) : null}
             </section>
           )
         ) : null}
@@ -511,6 +582,7 @@ export function DashboardShell({
             currentUser={currentUser}
             labs={labs}
             templates={filteredTemplates}
+            isReadOnly={isBasicGradeStandardUser}
             onCreateTemplate={onCreateTemplate}
             onArchiveTemplate={onArchiveTemplate}
             onFetchTemplateDetail={onFetchTemplateDetail}

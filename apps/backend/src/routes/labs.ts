@@ -1,5 +1,8 @@
 import { FastifyPluginAsync } from "fastify";
-import { Role } from "shared-types";
+import {
+  Role,
+  StaffType,
+} from "shared-types";
 
 import {
   canAccessHospital,
@@ -16,6 +19,7 @@ import {
   updateLab,
 } from "../services/lab-service";
 import { maybeAutoSyncPrivateSeed } from "../services/private-seed-sync-service";
+import { findUserById } from "../services/user-service";
 
 interface CreateLabBody {
   Body: {
@@ -31,6 +35,21 @@ interface LabParams {
   Params: {
     id: string;
   };
+}
+
+function canCreateLabsForOwnScope(input: {
+  role: Role;
+  staffType: string;
+  isGlobalAdmin: boolean;
+}) {
+  if (input.role === Role.ADMIN) {
+    return !input.isGlobalAdmin;
+  }
+
+  return (
+    input.staffType === StaffType.TRAINING_COORDINATOR ||
+    input.staffType === StaffType.SENIOR_MEDICAL_SCIENTIST
+  );
 }
 
 const labRoutes: FastifyPluginAsync = async (fastify) => {
@@ -65,7 +84,10 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<CreateLabBody>(
     "/labs",
     {
-      preHandler: [fastify.authenticate, fastify.requireRole(Role.ADMIN)],
+      preHandler: [
+        fastify.authenticate,
+        fastify.requireAnyRole([Role.ADMIN, Role.TRAINER, Role.STAFF]),
+      ],
     },
     async (request, reply) => {
       const hospitalId = Number(request.body?.hospitalId);
@@ -109,9 +131,20 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.db,
         Number(request.user.id),
       );
+      const currentUser = await findUserById(fastify.db, Number(request.user.id));
 
-      if (!scope) {
+      if (!scope || !currentUser) {
         return reply.status(404).send({ message: "User not found" });
+      }
+
+      if (
+        !canCreateLabsForOwnScope({
+          role: request.user.role,
+          staffType: currentUser.staff_type,
+          isGlobalAdmin: currentUser.is_global_admin,
+        })
+      ) {
+        return reply.status(403).send({ message: "Forbidden" });
       }
 
       if (!canAccessHospital(scope, hospitalId)) {

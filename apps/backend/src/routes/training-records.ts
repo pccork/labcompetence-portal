@@ -54,6 +54,40 @@ interface ReminderQuery {
 
 const allowedStatuses = new Set<string>(Object.values(AssignmentStatus));
 
+function findEmptyStringPath(
+  value: unknown,
+  currentPath = "assessmentPayloadJson",
+): string | null {
+  if (typeof value === "string") {
+    return value.trim() ? null : currentPath;
+  }
+
+  if (Array.isArray(value)) {
+    for (const [index, item] of value.entries()) {
+      const nestedPath = findEmptyStringPath(item, `${currentPath}[${index}]`);
+      if (nestedPath) {
+        return nestedPath;
+      }
+    }
+
+    return null;
+  }
+
+  if (value && typeof value === "object") {
+    for (const [key, nestedValue] of Object.entries(value)) {
+      const nestedPath = findEmptyStringPath(
+        nestedValue,
+        `${currentPath}.${key}`,
+      );
+      if (nestedPath) {
+        return nestedPath;
+      }
+    }
+  }
+
+  return null;
+}
+
 const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get(
     "/training-records",
@@ -199,6 +233,14 @@ const trainingRecordRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (status && !allowedStatuses.has(status)) {
         return reply.status(400).send({ message: "Valid status is required" });
+      }
+
+      const emptyAssessmentPath = findEmptyStringPath(assessmentPayloadJson);
+
+      if (emptyAssessmentPath) {
+        return reply.status(400).send({
+          message: `${emptyAssessmentPath} cannot be blank. Enter a real value or "N/A".`,
+        });
       }
 
       if (

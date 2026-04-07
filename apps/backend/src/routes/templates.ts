@@ -17,6 +17,7 @@ import {
   updateTemplate,
 } from "../services/template-service";
 import { maybeAutoSyncPrivateSeed } from "../services/private-seed-sync-service";
+import { findUserById } from "../services/user-service";
 
 interface TemplateParams {
   Params: {
@@ -44,8 +45,19 @@ interface TemplateVersionBody {
 
 const allowedStaffTypes = new Set<string>(Object.values(StaffType));
 
-function hasTemplateManagerRole(role: Role) {
-  return role === Role.ADMIN;
+function hasTemplateManagerAccess(input: {
+  role: Role;
+  staffType: string;
+  isGlobalAdmin: boolean;
+}) {
+  if (input.role === Role.ADMIN) {
+    return !input.isGlobalAdmin;
+  }
+
+  return (
+    input.staffType === StaffType.TRAINING_COORDINATOR ||
+    input.staffType === StaffType.SENIOR_MEDICAL_SCIENTIST
+  );
 }
 
 function sanitizeTemplateBody(body: TemplateBody["Body"]) {
@@ -109,10 +121,6 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
       ],
     },
     async (request, reply) => {
-      if (!hasTemplateManagerRole(request.user.role)) {
-        return reply.status(403).send({ message: "Forbidden" });
-      }
-
       const {
         name,
         labId,
@@ -169,9 +177,20 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.db,
         Number(request.user.id),
       );
+      const currentUser = await findUserById(fastify.db, Number(request.user.id));
 
-      if (!scope) {
+      if (!scope || !currentUser) {
         return reply.status(404).send({ message: "User not found" });
+      }
+
+      if (
+        !hasTemplateManagerAccess({
+          role: request.user.role,
+          staffType: currentUser.staff_type,
+          isGlobalAdmin: currentUser.is_global_admin,
+        })
+      ) {
+        return reply.status(403).send({ message: "Forbidden" });
       }
 
       if (!canAccessTrainingUnit(scope, lab.id, lab.hospital_id, lab.is_poc)) {

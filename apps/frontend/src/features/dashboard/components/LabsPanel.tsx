@@ -15,6 +15,8 @@ interface LabsPanelProps {
   selectedLabId: number | "all";
   onSelectLab: (labId: number | "all") => void;
   onCreateLab?: (input: CreateLabInput) => Promise<void>;
+  showCreateSection?: boolean;
+  showLabSections?: boolean;
 }
 
 export function LabsPanel({
@@ -24,6 +26,8 @@ export function LabsPanel({
   selectedLabId,
   onSelectLab,
   onCreateLab,
+  showCreateSection = true,
+  showLabSections = true,
 }: LabsPanelProps) {
   const [hospitalId, setHospitalId] = useState(() => hospitals[0]?.id || 1);
   const [departmentName, setDepartmentName] = useState("");
@@ -31,9 +35,14 @@ export function LabsPanel({
   const [isPoc, setIsPoc] = useState(false);
   const [formMessage, setFormMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const canManageSectionsByStaffType =
+    currentUser?.staff_type === "training_coordinator" ||
+    currentUser?.staff_type === "senior_medical_scientist";
   const canCreateSections =
-    currentUser?.role === "admin" &&
-    !currentUser.is_global_admin &&
+    showCreateSection &&
+    !!currentUser &&
+    ((currentUser.role === "admin" && !currentUser.is_global_admin) ||
+      canManageSectionsByStaffType) &&
     !!onCreateLab;
 
   return (
@@ -164,6 +173,7 @@ export function LabsPanel({
         </div>
       ) : null}
 
+      {showLabSections ? (
       <div className={canCreateSections ? "column is-8-desktop" : "column is-12"}>
         <section className="panel-card">
           <div className="panel-heading-row">
@@ -209,6 +219,7 @@ export function LabsPanel({
           </div>
         </section>
       </div>
+      ) : null}
     </section>
   );
 }

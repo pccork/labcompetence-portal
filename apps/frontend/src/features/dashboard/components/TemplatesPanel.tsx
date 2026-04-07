@@ -26,6 +26,8 @@ interface TemplatesPanelProps {
   onFetchTemplateDetail: (
     templateId: number
   ) => Promise<{ template: TemplateDetail }>;
+  showTemplateSetup?: boolean;
+  showFormLibrary?: boolean;
 }
 
 const staffTypeOptions = [
@@ -63,6 +65,7 @@ function getDefaultObjectives() {
   return [
     "Complete supervised practice in the section",
     "Demonstrate key maintenance/QC/sample-processing tasks",
+    "If a text response does not apply, enter N/A instead of leaving it blank.",
   ].join("\n");
 }
 
@@ -78,6 +81,8 @@ export function TemplatesPanel({
   onCreateTemplate,
   onArchiveTemplate,
   onFetchTemplateDetail,
+  showTemplateSetup = true,
+  showFormLibrary = true,
 }: TemplatesPanelProps) {
   const [isExpandedEditorOpen, setIsExpandedEditorOpen] = useState(false);
   const [labId, setLabId] = useState(() => labs[0]?.id || 1);
@@ -96,7 +101,7 @@ export function TemplatesPanel({
   const [isActive, setIsActive] = useState(true);
   const [eventCode, setEventCode] = useState("TE/NEW-SECTION");
   const [eventDescription, setEventDescription] = useState(
-    "Describe the section training and related SOPs here."
+    "Describe the section training and related SOPs here. If a response does not apply, enter N/A instead of leaving it blank."
   );
   const [eventObjectivesText, setEventObjectivesText] = useState(
     getDefaultObjectives()
@@ -106,7 +111,7 @@ export function TemplatesPanel({
   );
   const [assessmentCode, setAssessmentCode] = useState("CA/NEW-SECTION");
   const [assessmentDescription, setAssessmentDescription] = useState(
-    "Describe how the trainer will assess competence in this section."
+    "Describe how the trainer will assess competence in this section. If a response does not apply, enter N/A instead of leaving it blank."
   );
   const [assessmentObjectivesText, setAssessmentObjectivesText] = useState(
     "The trainer will deem the participant competent to perform the key tasks listed below."
@@ -263,13 +268,13 @@ export function TemplatesPanel({
           setFormTitle("Training Event and Competency Assessment Form");
           setEventCode("TE/NEW-SECTION");
           setEventDescription(
-            "Describe the section training and related SOPs here."
+            "Describe the section training and related SOPs here. If a response does not apply, enter N/A instead of leaving it blank."
           );
           setEventObjectivesText(getDefaultObjectives());
           setReferenceDocumentsText(getDefaultReferences());
           setAssessmentCode("CA/NEW-SECTION");
           setAssessmentDescription(
-            "Describe how the trainer will assess competence in this section."
+            "Describe how the trainer will assess competence in this section. If a response does not apply, enter N/A instead of leaving it blank."
           );
           setAssessmentObjectivesText(
             "The trainer will deem the participant competent to perform the key tasks listed below."
@@ -495,6 +500,9 @@ export function TemplatesPanel({
               value={eventDescription}
               onChange={(event) => setEventDescription(event.target.value)}
             />
+            <p className="mini-note">
+              Include wording such as: If not applicable, enter <code>N/A</code>.
+            </p>
 
             <div className="field mt-4">
               <label
@@ -548,6 +556,9 @@ export function TemplatesPanel({
                 value={assessmentDescription}
                 onChange={(event) => setAssessmentDescription(event.target.value)}
               />
+              <p className="mini-note">
+                Include wording such as: If not applicable, enter <code>N/A</code>.
+              </p>
             </div>
 
             <div className="field mt-4">
@@ -745,7 +756,7 @@ export function TemplatesPanel({
 
   return (
     <>
-      {isExpandedEditorOpen && !isReadOnly ? (
+      {isExpandedEditorOpen && !isReadOnly && showTemplateSetup ? (
         <div className="template-editor-overlay" role="dialog" aria-modal="true">
           <div className="template-editor-modal panel-card">
             <div className="panel-heading-row">
@@ -766,8 +777,12 @@ export function TemplatesPanel({
         </div>
       ) : null}
       <section className="columns is-multiline">
-      {!isReadOnly ? (
-        <div className="column is-5-desktop">
+      {!isReadOnly && showTemplateSetup ? (
+        <div
+          className={
+            showFormLibrary ? "column is-5-desktop" : "column is-12"
+          }
+        >
           <section className="panel-card">
             <div className="panel-heading-row">
               <div>
@@ -791,7 +806,14 @@ export function TemplatesPanel({
         </div>
       ) : null}
 
-      <div className={isReadOnly ? "column is-12" : "column is-7-desktop"}>
+      {showFormLibrary ? (
+      <div
+        className={
+          isReadOnly || !showTemplateSetup
+            ? "column is-12"
+            : "column is-7-desktop"
+        }
+      >
         <section className="panel-card">
           <div className="panel-heading-row">
             <div>
@@ -807,9 +829,8 @@ export function TemplatesPanel({
 
           {isReadOnly ? (
             <p className="mini-note mb-4">
-              Global admins can review template coverage here, but template
-              creation and updates stay with local admin / training coordinator
-              accounts.
+              You can review template coverage here, but template creation and
+              updates stay with local admin / training coordinator accounts.
             </p>
           ) : null}
 
@@ -974,6 +995,7 @@ export function TemplatesPanel({
           </div>
         </section>
       </div>
+      ) : null}
       </section>
     </>
   );
