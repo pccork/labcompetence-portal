@@ -51,6 +51,9 @@ import {
   PocRegistrationLinkSummary,
   PocTrainingRequestSummary,
   replyToPocTrainingRequest,
+  restoreDepartmentRecord,
+  restoreLabSection,
+  restoreTemplateRecord,
   TemplateSummary,
   TrainingAssignmentSummary,
   TrainingRecordSummary,
@@ -73,8 +76,12 @@ export function App() {
   const [authConfig, setAuthConfig] = useState<AuthProvidersConfig | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [labs, setLabs] = useState<LabSummary[]>([]);
+  const [archivedLabs, setArchivedLabs] = useState<LabSummary[]>([]);
   const [hospitals, setHospitals] = useState<HospitalSummary[]>([]);
   const [departments, setDepartments] = useState<DepartmentSummary[]>([]);
+  const [archivedDepartments, setArchivedDepartments] = useState<
+    DepartmentSummary[]
+  >([]);
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
   const [registrationLinks, setRegistrationLinks] = useState<
@@ -109,9 +116,9 @@ export function App() {
 
       const commonRequests = await Promise.all([
         fetchHospitals(activeToken),
-        fetchDepartments(activeToken),
+        fetchDepartments(activeToken, true),
         fetchUsers(activeToken),
-        fetchLabs(activeToken),
+        fetchLabs(activeToken, true),
         fetchTemplates(activeToken),
       ]);
 
@@ -155,9 +162,15 @@ export function App() {
 
       setCurrentUser(me.user);
       setHospitals(hospitalsResponse.hospitals);
-      setDepartments(departmentsResponse.departments);
+      setDepartments(
+        departmentsResponse.departments.filter((department) => department.is_active)
+      );
+      setArchivedDepartments(
+        departmentsResponse.departments.filter((department) => !department.is_active)
+      );
       setUsers(usersResponse.users);
-      setLabs(labsResponse.labs);
+      setLabs(labsResponse.labs.filter((lab) => lab.is_active));
+      setArchivedLabs(labsResponse.labs.filter((lab) => !lab.is_active));
       setTemplates(templatesResponse.templates);
       setAssignments(workflowResponses.assignments.assignments);
       setRecords(workflowResponses.records.records);
@@ -309,8 +322,10 @@ export function App() {
     setCurrentUser(null);
     setHospitals([]);
     setDepartments([]);
+    setArchivedDepartments([]);
     setUsers([]);
     setLabs([]);
+    setArchivedLabs([]);
     setTemplates([]);
     setRegistrationLinks([]);
     setPoctRequests([]);
@@ -343,8 +358,10 @@ export function App() {
       currentUser={currentUser}
       hospitals={hospitals}
       departments={departments}
+      archivedDepartments={archivedDepartments}
       users={users}
       labs={labs}
+      archivedLabs={archivedLabs}
       templates={templates}
       assignments={assignments}
       records={records}
@@ -371,6 +388,10 @@ export function App() {
         await archiveDepartmentRecord(token, departmentId);
         await loadDashboard(token);
       }}
+      onRestoreDepartment={async (departmentId: number) => {
+        await restoreDepartmentRecord(token, departmentId);
+        await loadDashboard(token);
+      }}
       onDeleteDepartment={async (departmentId: number) => {
         await deleteDepartmentRecord(token, departmentId);
         await loadDashboard(token);
@@ -381,6 +402,10 @@ export function App() {
       }}
       onArchiveLab={async (labId: number) => {
         await archiveLabSection(token, labId);
+        await loadDashboard(token);
+      }}
+      onRestoreLab={async (labId: number) => {
+        await restoreLabSection(token, labId);
         await loadDashboard(token);
       }}
       onDeleteLab={async (labId: number) => {
@@ -409,6 +434,10 @@ export function App() {
       }}
       onDeleteTemplate={async (templateId: number) => {
         await deleteTemplateRecord(token, templateId);
+        await loadDashboard(token);
+      }}
+      onRestoreTemplate={async (templateId: number) => {
+        await restoreTemplateRecord(token, templateId);
         await loadDashboard(token);
       }}
       onFetchTemplateDetail={(templateId: number) =>

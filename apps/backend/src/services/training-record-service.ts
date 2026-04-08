@@ -194,6 +194,7 @@ export async function listTrainingRecords(
       OR template_lab.hospital_id = $1
       OR ($2 = true AND template_lab.is_poc = true)
     )
+      AND tr.is_active = true
       AND (
         $3::int[] IS NULL
         OR template_unit.id = ANY($3::int[])
@@ -328,6 +329,7 @@ export async function listTrainingRecordsExpiringWithinDays(
     ${trainingRecordSummarySelect}
     WHERE tr.expires_at >= NOW()
       AND tr.expires_at <= NOW() + ($1::text || ' days')::interval
+      AND tr.is_active = true
       AND (
         $2::int IS NULL
         OR template_lab.hospital_id = $2

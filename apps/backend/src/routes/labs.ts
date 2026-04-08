@@ -19,6 +19,7 @@ import {
   findLabById,
   getLabUsage,
   listLabs,
+  restoreLab,
   updateLab,
 } from "../services/lab-service";
 import { maybeAutoSyncPrivateSeed } from "../services/private-seed-sync-service";
@@ -41,6 +42,12 @@ interface LabParams {
   };
 }
 
+interface LabQuery {
+  Querystring: {
+    includeArchived?: string;
+  };
+}
+
 function canCreateLabsForOwnScope(input: {
   role: Role;
   staffType: string;
@@ -57,7 +64,7 @@ function canCreateLabsForOwnScope(input: {
 }
 
 const labRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get(
+  fastify.get<LabQuery>(
     "/labs",
     {
       preHandler: [
@@ -66,6 +73,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
       ],
     },
     async (request, reply) => {
+      const includeArchived = request.query?.includeArchived === "true";
       const scope = await getHospitalAccessScope(
         fastify.db,
         Number(request.user.id),
@@ -79,6 +87,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.db,
         resolveScopedHospitalId(scope),
         scope.trainingUnitIds,
+        includeArchived,
       );
 
       return { labs };
@@ -483,6 +492,64 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
       await maybeAutoSyncPrivateSeed(fastify.db);
 
       return { archived: true };
+    },
+  );
+
+  fastify.patch<LabParams>(
+    "/labs/:id/restore",
+    {
+      preHandler: [fastify.authenticate, fastify.requireRole(Role.ADMIN)],
+    },
+    async (request, reply) => {
+      const labId = Number(request.params.id);
+
+      if (!Number.isInteger(labId) || labId <= 0) {
+        return reply.status(400).send({ message: "Invalid lab id" });
+      }
+
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id),
+      );
+      const currentUser = await findUserById(fastify.db, Number(request.user.id));
+
+      if (!scope || !currentUser) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      const existingLab = await findLabById(fastify.db, labId);
+
+      if (!existingLab) {
+        return reply.status(404).send({ message: "Training unit not found" });
+      }
+
+      if (
+        !canAccessTrainingUnit(
+          scope,
+          existingLab.id,
+          existingLab.hospital_id,
+          existingLab.is_poc,
+        ) ||
+        !canCreateLabsForOwnScope({
+          role: request.user.role,
+          staffType: currentUser.staff_type,
+          isGlobalAdmin: currentUser.is_global_admin,
+        })
+      ) {
+        return reply.status(403).send({
+          message: "You cannot restore sections in this scope",
+        });
+      }
+
+      const restored = await restoreLab(fastify.db, labId);
+
+      if (!restored) {
+        return reply.status(404).send({ message: "Training unit not found" });
+      }
+
+      await maybeAutoSyncPrivateSeed(fastify.db);
+
+      return { restored: true };
     },
   );
 };

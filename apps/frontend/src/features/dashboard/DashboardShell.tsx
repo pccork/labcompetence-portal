@@ -42,8 +42,10 @@ interface DashboardShellProps {
   currentUser: CurrentUser;
   hospitals: HospitalSummary[];
   departments: DepartmentSummary[];
+  archivedDepartments: DepartmentSummary[];
   users: UserSummary[];
   labs: LabSummary[];
+  archivedLabs: LabSummary[];
   templates: TemplateSummary[];
   assignments: TrainingAssignmentSummary[];
   records: TrainingRecordSummary[];
@@ -61,14 +63,17 @@ interface DashboardShellProps {
   onCreateHospital: (input: { name: string }) => Promise<void>;
   onCreateDepartment: (input: CreateDepartmentInput) => Promise<void>;
   onArchiveDepartment: (departmentId: number) => Promise<void>;
+  onRestoreDepartment: (departmentId: number) => Promise<void>;
   onDeleteDepartment: (departmentId: number) => Promise<void>;
   onCreateLab: (input: CreateLabInput) => Promise<void>;
   onArchiveLab: (labId: number) => Promise<void>;
+  onRestoreLab: (labId: number) => Promise<void>;
   onDeleteLab: (labId: number) => Promise<void>;
   onArchiveUser: (userId: number) => Promise<void>;
   onCreateTemplate: (input: CreateTemplateInput) => Promise<void>;
   onArchiveTemplate: (template: TemplateSummary) => Promise<void>;
   onDeleteTemplate: (templateId: number) => Promise<void>;
+  onRestoreTemplate: (templateId: number) => Promise<void>;
   onFetchTemplateDetail: (
     templateId: number,
   ) => Promise<{ template: TemplateDetail }>;
@@ -119,8 +124,10 @@ export function DashboardShell({
   currentUser,
   hospitals,
   departments,
+  archivedDepartments,
   users,
   labs,
+  archivedLabs,
   templates,
   assignments,
   records,
@@ -131,14 +138,17 @@ export function DashboardShell({
   onCreateHospital,
   onCreateDepartment,
   onArchiveDepartment,
+  onRestoreDepartment,
   onDeleteDepartment,
   onCreateLab,
   onArchiveLab,
+  onRestoreLab,
   onDeleteLab,
   onArchiveUser,
   onCreateTemplate,
   onArchiveTemplate,
   onDeleteTemplate,
+  onRestoreTemplate,
   onFetchTemplateDetail,
   onCreateAssignment,
   onCreateRecord,
@@ -432,11 +442,13 @@ export function DashboardShell({
               currentUser={currentUser}
               hospitals={hospitals}
               departments={departments}
+              archivedDepartments={archivedDepartments}
               labs={labs}
               users={users}
               onCreateHospital={onCreateHospital}
               onCreateDepartment={onCreateDepartment}
               onArchiveDepartment={onArchiveDepartment}
+              onRestoreDepartment={onRestoreDepartment}
               onDeleteDepartment={onDeleteDepartment}
             />
           ) : (
@@ -516,6 +528,7 @@ export function DashboardShell({
                   onCreateTemplate={onCreateTemplate}
                   onArchiveTemplate={onArchiveTemplate}
                   onDeleteTemplate={onDeleteTemplate}
+                  onRestoreTemplate={onRestoreTemplate}
                   onFetchTemplateDetail={onFetchTemplateDetail}
                 />
               </div>
@@ -523,13 +536,16 @@ export function DashboardShell({
                 <LabsPanel
                   currentUser={currentUser}
                   hospitals={hospitals}
+                  departments={departments}
                   labs={labs}
+                  archivedLabs={archivedLabs}
                   selectedLabId={selectedLabId}
                   onSelectLab={setSelectedLabId}
-                    onCreateLab={onCreateLab}
-                    onArchiveLab={onArchiveLab}
-                    onDeleteLab={onDeleteLab}
-                    showCreateSection={false}
+                  onCreateLab={onCreateLab}
+                  onArchiveLab={onArchiveLab}
+                  onRestoreLab={onRestoreLab}
+                  onDeleteLab={onDeleteLab}
+                  showCreateSection={false}
                   showLabSections
                 />
               </div>
@@ -545,6 +561,7 @@ export function DashboardShell({
                     onCreateTemplate={onCreateTemplate}
                     onArchiveTemplate={onArchiveTemplate}
                     onDeleteTemplate={onDeleteTemplate}
+                    onRestoreTemplate={onRestoreTemplate}
                     onFetchTemplateDetail={onFetchTemplateDetail}
                   />
                 </div>
@@ -556,10 +573,12 @@ export function DashboardShell({
                     hospitals={hospitals}
                     departments={departments}
                     labs={labs}
+                    archivedLabs={archivedLabs}
                     selectedLabId={selectedLabId}
                     onSelectLab={setSelectedLabId}
                     onCreateLab={onCreateLab}
                     onArchiveLab={onArchiveLab}
+                    onRestoreLab={onRestoreLab}
                     onDeleteLab={onDeleteLab}
                     showCreateSection
                     showLabSections={false}
@@ -613,6 +632,7 @@ export function DashboardShell({
             onCreateTemplate={onCreateTemplate}
             onArchiveTemplate={onArchiveTemplate}
             onDeleteTemplate={onDeleteTemplate}
+            onRestoreTemplate={onRestoreTemplate}
             onFetchTemplateDetail={onFetchTemplateDetail}
           />
         ) : null}
@@ -626,6 +646,7 @@ export function DashboardShell({
             onCreateTemplate={onCreateTemplate}
             onArchiveTemplate={onArchiveTemplate}
             onDeleteTemplate={onDeleteTemplate}
+            onRestoreTemplate={onRestoreTemplate}
             onFetchTemplateDetail={onFetchTemplateDetail}
           />
         ) : null}
@@ -648,11 +669,13 @@ export function DashboardShell({
               currentUser={currentUser}
               hospitals={hospitals}
               departments={departments}
+              archivedDepartments={archivedDepartments}
               labs={labs}
               users={users}
               onCreateHospital={onCreateHospital}
               onCreateDepartment={onCreateDepartment}
               onArchiveDepartment={onArchiveDepartment}
+              onRestoreDepartment={onRestoreDepartment}
               onDeleteDepartment={onDeleteDepartment}
             />
           ) : (
@@ -661,10 +684,12 @@ export function DashboardShell({
               hospitals={hospitals}
               departments={departments}
               labs={labs}
+              archivedLabs={archivedLabs}
               selectedLabId={selectedLabId}
               onSelectLab={setSelectedLabId}
               onCreateLab={onCreateLab}
               onArchiveLab={onArchiveLab}
+              onRestoreLab={onRestoreLab}
               onDeleteLab={onDeleteLab}
             />
           )

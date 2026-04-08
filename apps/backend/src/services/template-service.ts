@@ -321,6 +321,19 @@ export async function updateTemplate(
         `,
         [templateId]
       );
+    } else {
+      await client.query(
+        `
+        UPDATE training_records
+        SET is_active = true
+        WHERE template_version_id IN (
+          SELECT id
+          FROM template_versions
+          WHERE template_id = $1
+        )
+        `,
+        [templateId]
+      );
     }
 
     await client.query("COMMIT");

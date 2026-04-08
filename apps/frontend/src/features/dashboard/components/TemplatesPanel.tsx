@@ -24,6 +24,7 @@ interface TemplatesPanelProps {
   onCreateTemplate: (input: CreateTemplateInput) => Promise<void>;
   onArchiveTemplate: (template: TemplateSummary) => Promise<void>;
   onDeleteTemplate: (templateId: number) => Promise<void>;
+  onRestoreTemplate: (templateId: number) => Promise<void>;
   onFetchTemplateDetail: (
     templateId: number
   ) => Promise<{ template: TemplateDetail }>;
@@ -82,6 +83,7 @@ export function TemplatesPanel({
   onCreateTemplate,
   onArchiveTemplate,
   onDeleteTemplate,
+  onRestoreTemplate,
   onFetchTemplateDetail,
   showTemplateSetup = true,
   showFormLibrary = true,
@@ -901,6 +903,37 @@ export function TemplatesPanel({
                         }}
                       >
                         Delete
+                      </button>
+                    ) : null}
+                    {!template.is_active && !isReadOnly ? (
+                      <button
+                        className="button is-link is-light is-small"
+                        type="button"
+                        onClick={() => {
+                          setPrintMessage(null);
+
+                          const confirmed = confirmManagedAction(
+                            currentUser,
+                            `Restore template "${template.name}"? Linked archived training records for this template will be restored with it.`,
+                            "Please confirm again to restore this template and its linked training records."
+                          );
+
+                          if (!confirmed) {
+                            return;
+                          }
+
+                          startTransition(() => {
+                            void onRestoreTemplate(template.id).catch((error) => {
+                              setPrintMessage(
+                                error instanceof Error
+                                  ? error.message
+                                  : "Unable to restore template"
+                              );
+                            });
+                          });
+                        }}
+                      >
+                        Restore
                       </button>
                     ) : null}
                     {template.is_active && !isReadOnly ? (

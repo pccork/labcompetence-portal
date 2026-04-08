@@ -14,6 +14,7 @@ import {
   findDepartmentById,
   getDepartmentUsage,
   listDepartments,
+  restoreDepartment,
 } from "../services/lab-service";
 import { maybeAutoSyncPrivateSeed } from "../services/private-seed-sync-service";
 
@@ -31,8 +32,14 @@ interface DepartmentParams {
   };
 }
 
+interface DepartmentQuery {
+  Querystring: {
+    includeArchived?: string;
+  };
+}
+
 const departmentRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get(
+  fastify.get<DepartmentQuery>(
     "/departments",
     {
       preHandler: [
@@ -41,6 +48,7 @@ const departmentRoutes: FastifyPluginAsync = async (fastify) => {
       ],
     },
     async (request, reply) => {
+      const includeArchived = request.query?.includeArchived === "true";
       const scope = await getHospitalAccessScope(
         fastify.db,
         Number(request.user.id),
@@ -53,6 +61,7 @@ const departmentRoutes: FastifyPluginAsync = async (fastify) => {
       const departments = await listDepartments(
         fastify.db,
         resolveScopedHospitalId(scope),
+        includeArchived,
       );
 
       return { departments };
@@ -167,6 +176,51 @@ const departmentRoutes: FastifyPluginAsync = async (fastify) => {
       await maybeAutoSyncPrivateSeed(fastify.db);
 
       return { archived: true };
+    },
+  );
+
+  fastify.patch<DepartmentParams>(
+    "/departments/:id/restore",
+    {
+      preHandler: [fastify.authenticate, fastify.requireRole(Role.ADMIN)],
+    },
+    async (request, reply) => {
+      const departmentId = Number(request.params.id);
+
+      if (!Number.isInteger(departmentId) || departmentId <= 0) {
+        return reply.status(400).send({ message: "Invalid department id" });
+      }
+
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id),
+      );
+
+      if (!scope) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      if (!scope.canAccessAllHospitals) {
+        return reply.status(403).send({
+          message: "Only a global admin can restore departments",
+        });
+      }
+
+      const department = await findDepartmentById(fastify.db, departmentId);
+
+      if (!department) {
+        return reply.status(404).send({ message: "Department not found" });
+      }
+
+      const restored = await restoreDepartment(fastify.db, departmentId);
+
+      if (!restored) {
+        return reply.status(404).send({ message: "Department not found" });
+      }
+
+      await maybeAutoSyncPrivateSeed(fastify.db);
+
+      return { restored: true };
     },
   );
 

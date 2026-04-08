@@ -25,7 +25,8 @@ export interface DepartmentSummary {
 export async function listLabs(
   db: Pool,
   hospitalId?: number,
-  trainingUnitIds?: number[]
+  trainingUnitIds?: number[],
+  includeArchived = false
 ) {
   const result = await db.query<Lab>(
     `
@@ -43,15 +44,15 @@ export async function listLabs(
     INNER JOIN labs l ON l.id = tu.lab_id
     INNER JOIN hospitals h ON h.id = l.hospital_id
     WHERE ($1::int IS NULL OR l.hospital_id = $1)
-      AND l.is_active = true
-      AND tu.is_active = true
+      AND ($3 = true OR l.is_active = true)
+      AND ($3 = true OR tu.is_active = true)
       AND (
         $2::int[] IS NULL
         OR tu.id = ANY($2::int[])
       )
     ORDER BY h.name ASC, l.name ASC, tu.name ASC
     `,
-    [hospitalId ?? null, trainingUnitIds ?? null]
+    [hospitalId ?? null, trainingUnitIds ?? null, includeArchived]
   );
 
   return result.rows;
@@ -83,7 +84,11 @@ async function findOrCreateDepartment(
   return departmentId;
 }
 
-export async function listDepartments(db: Pool, hospitalId?: number) {
+export async function listDepartments(
+  db: Pool,
+  hospitalId?: number,
+  includeArchived = false
+) {
   const result = await db.query<DepartmentSummary>(
     `
     SELECT
@@ -97,10 +102,10 @@ export async function listDepartments(db: Pool, hospitalId?: number) {
     FROM labs l
     INNER JOIN hospitals h ON h.id = l.hospital_id
     WHERE ($1::int IS NULL OR l.hospital_id = $1)
-      AND l.is_active = true
+      AND ($2 = true OR l.is_active = true)
     ORDER BY h.name ASC, l.name ASC
     `,
-    [hospitalId ?? null]
+    [hospitalId ?? null, includeArchived]
   );
 
   return result.rows;
@@ -315,11 +320,39 @@ export async function archiveLab(db: Pool, id: number) {
   return result.rows[0];
 }
 
+export async function restoreLab(db: Pool, id: number) {
+  const result = await db.query<{ id: number }>(
+    `
+    UPDATE training_units
+    SET is_active = true
+    WHERE id = $1
+    RETURNING id
+    `,
+    [id]
+  );
+
+  return result.rows[0];
+}
+
 export async function archiveDepartment(db: Pool, id: number) {
   const result = await db.query<{ id: number }>(
     `
     UPDATE labs
     SET is_active = false
+    WHERE id = $1
+    RETURNING id
+    `,
+    [id]
+  );
+
+  return result.rows[0];
+}
+
+export async function restoreDepartment(db: Pool, id: number) {
+  const result = await db.query<{ id: number }>(
+    `
+    UPDATE labs
+    SET is_active = true
     WHERE id = $1
     RETURNING id
     `,

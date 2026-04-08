@@ -14,11 +14,13 @@ interface GlobalAdminOverviewPanelProps {
   currentUser: CurrentUser;
   hospitals: HospitalSummary[];
   departments: DepartmentSummary[];
+  archivedDepartments: DepartmentSummary[];
   labs: LabSummary[];
   users: UserSummary[];
   onCreateHospital: (input: { name: string }) => Promise<void>;
   onCreateDepartment: (input: CreateDepartmentInput) => Promise<void>;
   onArchiveDepartment: (departmentId: number) => Promise<void>;
+  onRestoreDepartment: (departmentId: number) => Promise<void>;
   onDeleteDepartment: (departmentId: number) => Promise<void>;
 }
 
@@ -26,11 +28,13 @@ export function GlobalAdminOverviewPanel({
   currentUser,
   hospitals,
   departments,
+  archivedDepartments,
   labs,
   users,
   onCreateHospital,
   onCreateDepartment,
   onArchiveDepartment,
+  onRestoreDepartment,
   onDeleteDepartment,
 }: GlobalAdminOverviewPanelProps) {
   const [hospitalName, setHospitalName] = useState("");
@@ -371,6 +375,62 @@ export function GlobalAdminOverviewPanel({
                 </div>
               </article>
             ))}
+          </div>
+        </section>
+      </div>
+
+      <div className="column is-12">
+        <section className="panel-card">
+          <div className="panel-heading-row">
+            <div>
+              <p className="panel-kicker">Archived departments</p>
+              <h2 className="title is-5">Restore department</h2>
+            </div>
+            <span className="tag is-light">{archivedDepartments.length}</span>
+          </div>
+
+          <div className="lab-grid">
+            {archivedDepartments.length === 0 ? (
+              <p className="empty-state">No archived departments.</p>
+            ) : (
+              archivedDepartments.map((department) => (
+                <article className="lab-chip" key={department.id}>
+                  <strong>{department.name}</strong>
+                  <small>{department.hospital_name}</small>
+                  <span className="tag is-light">archived</span>
+                  <div className="buttons mt-2">
+                    <button
+                      className="button is-small is-link is-light"
+                      type="button"
+                      onClick={() => {
+                        setDepartmentMessage(null);
+                        const confirmed = confirmManagedAction(
+                          currentUser,
+                          `Restore department "${department.name}"?`,
+                          "Please confirm again to restore this department."
+                        );
+
+                        if (!confirmed) {
+                          return;
+                        }
+
+                        startTransition(() => {
+                          void onRestoreDepartment(department.id).catch((error) => {
+                            setDepartmentMessage(
+                              error instanceof Error
+                                ? error.message
+                                : "Unable to restore department"
+                            );
+                          });
+                        });
+                      }}
+                    >
+                      Restore
+                    </button>
+                  </div>
+                </article>
+              ))
+            )}
           </div>
         </section>
       </div>

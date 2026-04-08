@@ -14,10 +14,12 @@ interface LabsPanelProps {
   hospitals?: HospitalSummary[];
   departments?: DepartmentSummary[];
   labs: LabSummary[];
+  archivedLabs?: LabSummary[];
   selectedLabId: number | "all";
   onSelectLab: (labId: number | "all") => void;
   onCreateLab?: (input: CreateLabInput) => Promise<void>;
   onArchiveLab?: (labId: number) => Promise<void>;
+  onRestoreLab?: (labId: number) => Promise<void>;
   onDeleteLab?: (labId: number) => Promise<void>;
   showCreateSection?: boolean;
   showLabSections?: boolean;
@@ -28,10 +30,12 @@ export function LabsPanel({
   hospitals = [],
   departments = [],
   labs,
+  archivedLabs = [],
   selectedLabId,
   onSelectLab,
   onCreateLab,
   onArchiveLab,
+  onRestoreLab,
   onDeleteLab,
   showCreateSection = true,
   showLabSections = true,
@@ -340,6 +344,65 @@ export function LabsPanel({
             )}
           </div>
         </section>
+
+        {onRestoreLab ? (
+          <section className="panel-card mt-4">
+            <div className="panel-heading-row">
+              <div>
+                <p className="panel-kicker">Archived sections</p>
+                <h2 className="title is-5">Restore section</h2>
+              </div>
+              <span className="tag is-light">{archivedLabs.length}</span>
+            </div>
+
+            <div className="lab-grid">
+              {archivedLabs.length === 0 ? (
+                <p className="empty-state">No archived sections.</p>
+              ) : (
+                archivedLabs.map((lab) => (
+                  <article className="lab-chip" key={lab.id}>
+                    <strong>{lab.name}</strong>
+                    <small>{lab.department_name}</small>
+                    <small>{lab.hospital_name}</small>
+                    <span className="tag is-light">archived</span>
+                    <button
+                      className="button is-small is-link is-light mt-2"
+                      type="button"
+                      onClick={() => {
+                        if (!currentUser) {
+                          return;
+                        }
+
+                        setFormMessage(null);
+                        const confirmed = confirmManagedAction(
+                          currentUser,
+                          `Restore section "${lab.name}"?`,
+                          "Please confirm again to restore this section."
+                        );
+
+                        if (!confirmed) {
+                          return;
+                        }
+
+                        startTransition(() => {
+                          void onRestoreLab(lab.id).catch((error) => {
+                            setFormMessage(
+                              error instanceof Error
+                                ? error.message
+                                : "Unable to restore section"
+                            );
+                          });
+                        });
+                      }}
+                    >
+                      Restore
+                    </button>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
+        ) : null}
       </div>
       ) : null}
     </section>

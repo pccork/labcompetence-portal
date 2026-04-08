@@ -533,6 +533,80 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
       return { deleted: true };
     },
   );
+
+  fastify.patch<TemplateParams>(
+    "/templates/:id/restore",
+    {
+      preHandler: [
+        fastify.authenticate,
+        fastify.requireAnyRole([Role.ADMIN, Role.TRAINER, Role.STAFF]),
+      ],
+    },
+    async (request, reply) => {
+      const templateId = Number(request.params.id);
+
+      if (!Number.isInteger(templateId) || templateId <= 0) {
+        return reply.status(400).send({ message: "Invalid template id" });
+      }
+
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id),
+      );
+      const currentUser = await findUserById(fastify.db, Number(request.user.id));
+
+      if (!scope || !currentUser) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      if (
+        !hasTemplateManagerAccess({
+          role: request.user.role,
+          staffType: currentUser.staff_type,
+          isGlobalAdmin: currentUser.is_global_admin,
+        })
+      ) {
+        return reply.status(403).send({ message: "Forbidden" });
+      }
+
+      const template = await findTemplateById(fastify.db, templateId);
+
+      if (!template) {
+        return reply.status(404).send({ message: "Template not found" });
+      }
+
+      if (
+        !canAccessTrainingUnit(
+          scope,
+          template.lab_id,
+          template.lab_hospital_id,
+          template.lab_is_poc,
+        )
+      ) {
+        return reply.status(403).send({
+          message: "You cannot restore templates from this section",
+        });
+      }
+
+      const restored = await updateTemplate(fastify.db, {
+        templateId,
+        name: template.name,
+        labId: template.lab_id,
+        formFamilyReference: template.form_family_reference,
+        templateKind: template.template_kind,
+        targetStaffType: template.target_staff_type,
+        isActive: true,
+      });
+
+      if (!restored) {
+        return reply.status(404).send({ message: "Template not found" });
+      }
+
+      await maybeAutoSyncPrivateSeed(fastify.db);
+
+      return { template: restored };
+    },
+  );
 };
 
 export default templateRoutes;

@@ -259,17 +259,21 @@ export interface PocSelfRegistrationInput {
   password?: string;
 }
 
-export async function fetchLabs(token: string) {
-  return apiRequest<{ labs: LabSummary[] }>("/labs", {}, token);
+export async function fetchLabs(token: string, includeArchived = false) {
+  const query = includeArchived ? "?includeArchived=true" : "";
+
+  return apiRequest<{ labs: LabSummary[] }>(`/labs${query}`, {}, token);
 }
 
 export async function fetchHospitals(token: string) {
   return apiRequest<{ hospitals: HospitalSummary[] }>("/hospitals", {}, token);
 }
 
-export async function fetchDepartments(token: string) {
+export async function fetchDepartments(token: string, includeArchived = false) {
+  const query = includeArchived ? "?includeArchived=true" : "";
+
   return apiRequest<{ departments: DepartmentSummary[] }>(
-    "/departments",
+    `/departments${query}`,
     {},
     token
   );
@@ -317,6 +321,16 @@ export async function archiveDepartmentRecord(token: string, departmentId: numbe
   );
 }
 
+export async function restoreDepartmentRecord(token: string, departmentId: number) {
+  return apiRequest<{ restored: boolean }>(
+    `/departments/${departmentId}/restore`,
+    {
+      method: "PATCH",
+    },
+    token
+  );
+}
+
 export async function deleteDepartmentRecord(token: string, departmentId: number) {
   return apiRequest<{ deleted: boolean }>(
     `/departments/${departmentId}`,
@@ -348,6 +362,16 @@ export async function createLabSection(
 export async function archiveLabSection(token: string, labId: number) {
   return apiRequest<{ archived: boolean }>(
     `/labs/${labId}/archive`,
+    {
+      method: "PATCH",
+    },
+    token
+  );
+}
+
+export async function restoreLabSection(token: string, labId: number) {
+  return apiRequest<{ restored: boolean }>(
+    `/labs/${labId}/restore`,
     {
       method: "PATCH",
     },
@@ -431,6 +455,16 @@ export async function deleteTemplateRecord(token: string, templateId: number) {
     `/templates/${templateId}`,
     {
       method: "DELETE",
+    },
+    token
+  );
+}
+
+export async function restoreTemplateRecord(token: string, templateId: number) {
+  return apiRequest<{ template: TemplateSummary }>(
+    `/templates/${templateId}/restore`,
+    {
+      method: "PATCH",
     },
     token
   );
