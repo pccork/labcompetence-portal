@@ -9,6 +9,7 @@
     "start": "node dist/server.js",
     "seed": "ts-node src/scripts/seed.ts",
     "bootstrap:local-poct": "ts-node src/scripts/bootstrap-local-poct.ts",
+    "cleanup:mass-spec-demo": "ts-node src/scripts/cleanup-mass-spectrometry-demo.ts",
     "reset:demo-passwords": "ts-node src/scripts/reset-demo-passwords.ts",
     "export:private-seed": "ts-node src/scripts/export-private-seed.ts",
     "db:init": "bash -lc 'set -a && source .env && set +a && for file in $(find db/migrations -maxdepth 1 -type f -name \"*.sql\" | sort); do psql \"$DATABASE_URL\" -f \"$file\"; done'",

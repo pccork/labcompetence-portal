@@ -1050,10 +1050,6 @@ async function seed() {
     departmentId: pocDepartmentId,
     name: "Glucose Meter",
   });
-  const massSpecLabId = await upsertTrainingUnit({
-    departmentId: biochemistryDepartmentId,
-    name: "Mass Spectrometry",
-  });
   const au5800UnitId = await upsertTrainingUnit({
     departmentId: biochemistryDepartmentId,
     name: "AU5800 Clinical Chemistry",
@@ -1092,9 +1088,6 @@ async function seed() {
     assignUserToLab(adminUserId, bloodGasUnitId),
     assignUserToLab(paulaPoctCoordinatorId, bloodGasUnitId),
     assignUserToLab(paulaPoctCoordinatorId, glucoseMeterUnitId),
-    assignUserToLab(jackCoordinatorId, massSpecLabId),
-    assignUserToLab(seanTrainerId, massSpecLabId),
-    assignUserToLab(ciaraScientistId, massSpecLabId),
     assignUserToLab(ciaraScientistId, clinicalBiochemistryUnitId),
     assignUserToLab(seanTrainerId, clinicalBiochemistryUnitId),
     assignUserToLab(adminUserId, immunologyUnitId),
@@ -1125,130 +1118,6 @@ async function seed() {
   ]);
 
   console.log("Labs and lab memberships seeded.");
-
-  const steroidTemplate = await upsertTemplateWithVersion({
-    name: "FOR-CUH-PAT-2 Mass Spectrometry Steroid Panel",
-    labId: massSpecLabId,
-    createdBy: seanTrainerId,
-    formFamilyReference: "FOR-CUH-PAT-2",
-    templateKind: "training_event_competency",
-    targetStaffType: StaffType.BASIC_GRADE_SCIENTIST,
-    schemaJson: buildForCuhPat2TemplateSchema({
-      sectionName: "Mass Spectrometry",
-      title: "Mass Spectrometry Steroid Panel Training",
-      eventCode: "TE/MS-STEROIDS",
-      assessmentCode: "CA/MS-STEROIDS",
-      eventDescription:
-        "Training on LC-MS/MS steroid panel sample preparation, calibration review, batch setup, peak integration checks, and result authorisation workflow under supervision.",
-      eventObjectives: [
-        "Prepare patient samples and calibration/QC material for the Mass Spectrometry steroid panel.",
-        "Review chromatography and flag integration issues before supervised authorisation.",
-        "Follow current SOPs and instrument troubleshooting guidance for Mass Spectrometry batch work.",
-      ],
-      assessmentDescription:
-        "The participant will demonstrate Mass Spectrometry steroid panel competency to a Senior Medical Scientist or nominated trainer using direct observation and result review.",
-      assessmentObjectives: [
-        "The trainer will deem the participant competent to prepare, process, review, and escalate Mass Spectrometry steroid panel work.",
-      ],
-      competencyTasks: [
-        {
-          taskLabel: "Sample preparation and batch setup",
-          method: "DOWP",
-        },
-        {
-          taskLabel: "Calibration, QC review, and peak integration checks",
-          method: "DOEM",
-        },
-        {
-          taskLabel: "Result review and supervised authorisation workflow",
-          method: "DORR",
-        },
-      ],
-      references: [
-        "FOR-CUH-PAT-2",
-        "Mass Spectrometry steroid panel SOP",
-        "LC-MS/MS analyser user guide",
-      ],
-    }),
-  });
-
-  const tdmTemplate = await upsertTemplateWithVersion({
-    name: "FOR-CUH-PAT-2 Mass Spectrometry TDM Review",
-    labId: massSpecLabId,
-    createdBy: seanTrainerId,
-    formFamilyReference: "FOR-CUH-PAT-2",
-    templateKind: "training_event_competency",
-    targetStaffType: StaffType.BASIC_GRADE_SCIENTIST,
-    schemaJson: buildForCuhPat2TemplateSchema({
-      sectionName: "Mass Spectrometry",
-      title: "Mass Spectrometry Therapeutic Drug Monitoring Training",
-      eventCode: "TE/MS-TDM",
-      assessmentCode: "CA/MS-TDM",
-      eventDescription:
-        "Training on therapeutic drug monitoring sample processing, internal standard review, acceptance criteria, and escalation of failed analytical runs.",
-      eventObjectives: [
-        "Process TDM samples and review internal standard response acceptance criteria.",
-        "Identify failed runs, document corrective actions, and escalate to the senior scientist/trainer.",
-      ],
-      assessmentDescription:
-        "The participant will demonstrate TDM sample processing, analytical run review, and troubleshooting competency under Senior Medical Scientist review.",
-      assessmentObjectives: [
-        "The trainer will deem the participant competent to complete TDM batch work and escalation documentation.",
-      ],
-      competencyTasks: [
-        {
-          taskLabel: "TDM sample processing and analytical batch review",
-          method: "DOWP",
-        },
-        {
-          taskLabel: "Failed-run troubleshooting and escalation",
-          method: "DOEM",
-        },
-      ],
-      references: ["FOR-CUH-PAT-2", "Mass Spectrometry TDM SOP"],
-    }),
-  });
-
-  const seniorTemplate = await upsertTemplateWithVersion({
-    name: "FOR-CUH-PAT-2 Mass Spectrometry Senior Trainer Review",
-    labId: massSpecLabId,
-    createdBy: jackCoordinatorId,
-    formFamilyReference: "FOR-CUH-PAT-2",
-    templateKind: "senior_staff_programme",
-    targetStaffType: StaffType.SENIOR_MEDICAL_SCIENTIST,
-    schemaJson: buildForCuhPat2TemplateSchema({
-      sectionName: "Mass Spectrometry",
-      title: "Mass Spectrometry Senior Scientist Trainer Review",
-      eventCode: "TE/MS-SENIOR",
-      assessmentCode: "CA/MS-SENIOR",
-      eventDescription:
-        "Annual senior scientist review for Mass Spectrometry supervision, escalation, assay governance, and trainee support responsibilities.",
-      eventObjectives: [
-        "Supervise Mass Spectrometry workflow and review trainee competency evidence.",
-        "Apply escalation, change-control, and quality governance processes for section incidents and assay updates.",
-      ],
-      assessmentDescription:
-        "Annual senior scientist competency review based on governance records, troubleshooting review, and supervised section signoff activity.",
-      assessmentObjectives: [
-        "The training co-ordinator will deem the participant competent to supervise, escalate, and support Mass Spectrometry training governance.",
-      ],
-      competencyTasks: [
-        {
-          taskLabel: "Review of trainee records and section signoff governance",
-          method: "DORR",
-        },
-        {
-          taskLabel:
-            "Assay troubleshooting, escalation, and quality documentation",
-          method: "DOEM",
-        },
-      ],
-      references: [
-        "FOR-CUH-PAT-2",
-        "Mass Spectrometry senior scientist competency checklist",
-      ],
-    }),
-  });
 
   const au5800Template = await upsertTemplateWithVersion({
     name: "FOR-CUH-PAT-2 Clinical Chemistry AU5800",
@@ -1713,33 +1582,6 @@ async function seed() {
   );
   console.log("POCT blood gas templates seeded from anonymised demo content.");
 
-  const ciaraSteroidAssignmentId = await upsertTrainingAssignment({
-    userId: ciaraScientistId,
-    templateId: steroidTemplate.templateId,
-    labId: massSpecLabId,
-    assignedBy: jackCoordinatorId,
-    renewalIntervalMonths: 12,
-    nextDueAt: addDays(28),
-  });
-
-  const ciaraTdmAssignmentId = await upsertTrainingAssignment({
-    userId: ciaraScientistId,
-    templateId: tdmTemplate.templateId,
-    labId: massSpecLabId,
-    assignedBy: jackCoordinatorId,
-    renewalIntervalMonths: 12,
-    nextDueAt: addDays(8),
-  });
-
-  const seanSeniorAssignmentId = await upsertTrainingAssignment({
-    userId: seanTrainerId,
-    templateId: seniorTemplate.templateId,
-    labId: massSpecLabId,
-    assignedBy: jackCoordinatorId,
-    renewalIntervalMonths: 12,
-    nextDueAt: addDays(74),
-  });
-
   await Promise.all([
     upsertTrainingAssignment({
       userId: ciaraScientistId,
@@ -1816,131 +1658,6 @@ async function seed() {
   ]);
 
   console.log("Biochemistry demo assignments seeded.");
-
-  await upsertTrainingRecord({
-    traineeId: ciaraScientistId,
-    templateVersionId: steroidTemplate.templateVersionId,
-    assignedTrainerId: seanTrainerId,
-    trainingAssignmentId: ciaraSteroidAssignmentId,
-    scheduledAt: isoDaysAgo(48),
-    completedAt: isoDaysAgo(42),
-    traineeSignedAt: isoDaysAgo(42),
-    expiresAt: addDays(28),
-    status: AssignmentStatus.SIGNEDOFF,
-    assessmentPayloadJson: {
-      trainerComments:
-        "The demo trainee completed supervised steroid panel sample preparation, reviewed QC flags correctly, and demonstrated escalation awareness for peak integration anomalies.",
-      traineeDeclarationAccepted: true,
-      sectionChecklist: [
-        {
-          task: "Sample preparation and batch setup",
-          outcome: "competent",
-        },
-        {
-          task: "QC and chromatography review",
-          outcome: "competent",
-        },
-        {
-          task: "Supervised result authorisation workflow",
-          outcome: "competent",
-        },
-      ],
-    },
-    specimens: [
-      {
-        specimenLabel: "MS-STER-24011876",
-        specimenType: "Serum",
-        analyserReference: "LC-MS/MS Steroid Panel",
-        processedAt: isoDaysAgo(43),
-        resultSummary:
-          "Routine adrenal steroid panel processed under supervision.",
-      },
-      {
-        specimenLabel: "MS-STER-24011893",
-        specimenType: "Serum",
-        analyserReference: "LC-MS/MS Steroid Panel",
-        processedAt: isoDaysAgo(42),
-        resultSummary:
-          "Repeat steroid panel with acceptable QC and chromatogram review.",
-      },
-    ],
-  });
-
-  await upsertTrainingRecord({
-    traineeId: ciaraScientistId,
-    templateVersionId: tdmTemplate.templateVersionId,
-    assignedTrainerId: seanTrainerId,
-    trainingAssignmentId: ciaraTdmAssignmentId,
-    scheduledAt: addDays(2),
-    completedAt: null,
-    traineeSignedAt: null,
-    expiresAt: addDays(8),
-    status: AssignmentStatus.PENDING,
-    assessmentPayloadJson: {
-      trainerComments:
-        "Upcoming refresher focused on TDM failed-run troubleshooting and escalation documentation.",
-      traineeDeclarationAccepted: false,
-      sectionChecklist: [
-        {
-          task: "Review internal standard acceptance criteria",
-          outcome: "pending",
-        },
-        {
-          task: "Document corrective action for failed batch",
-          outcome: "pending",
-        },
-      ],
-    },
-    specimens: [
-      {
-        specimenLabel: "MS-TDM-DEMO-001",
-        specimenType: "Plasma",
-        analyserReference: "LC-MS/MS TDM",
-        processedAt: addDays(2),
-        resultSummary:
-          "Training specimen placeholder for upcoming TDM refresher.",
-      },
-    ],
-  });
-
-  await upsertTrainingRecord({
-    traineeId: seanTrainerId,
-    templateVersionId: seniorTemplate.templateVersionId,
-    assignedTrainerId: jackCoordinatorId,
-    trainingAssignmentId: seanSeniorAssignmentId,
-    scheduledAt: isoDaysAgo(18),
-    completedAt: isoDaysAgo(11),
-    traineeSignedAt: isoDaysAgo(11),
-    expiresAt: addDays(74),
-    status: AssignmentStatus.SIGNEDOFF,
-    assessmentPayloadJson: {
-      trainerComments:
-        "The demo section trainer completed the annual Mass Spectrometry senior trainer review with focus on section supervision and trainee signoff governance.",
-      traineeDeclarationAccepted: true,
-      sectionChecklist: [
-        {
-          task: "Governance and escalation review",
-          outcome: "competent",
-        },
-        {
-          task: "Trainer support and record review",
-          outcome: "competent",
-        },
-      ],
-    },
-    specimens: [
-      {
-        specimenLabel: "MS-SENIOR-REVIEW-2026",
-        specimenType: "Governance review",
-        analyserReference: "Mass Spectrometry section",
-        processedAt: isoDaysAgo(11),
-        resultSummary:
-          "Annual review of section training records and escalation logs.",
-      },
-    ],
-  });
-
-  console.log("Mass Spectrometry demo training records seeded.");
 
   await seedPrivateOverlay(passwordHash);
 

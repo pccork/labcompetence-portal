@@ -138,7 +138,7 @@ Stores child sections, instrument areas, or POCT device pathways under a parent 
 
 Examples:
 
-- `Biochemistry -> Mass Spectrometry`
+- `Biochemistry -> Clinical Biochemistry`
 - `Biochemistry -> AU5800`
 - `Point of Care -> Blood Gas`
 - `Point of Care -> Glucose Meter`

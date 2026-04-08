@@ -10,8 +10,12 @@ import {
 } from "../../auth/api";
 import {
   HospitalSummary,
+  TrainingRecordDetail,
+  TrainingAssignmentSummary,
+  TrainingRecordSummary,
   UserSummary,
 } from "../api";
+import { downloadTrainingRecordDocument } from "../../../shared/export/reportExport";
 import { confirmManagedAction } from "./managementConfirm";
 import { getRoleDisplayLabel } from "./roleLabels";
 
@@ -19,6 +23,11 @@ interface UsersPanelProps {
   currentUser: CurrentUser;
   hospitals: HospitalSummary[];
   users: UserSummary[];
+  assignments: TrainingAssignmentSummary[];
+  records: TrainingRecordSummary[];
+  onFetchRecordDetail: (
+    recordId: number
+  ) => Promise<{ record: TrainingRecordDetail }>;
   onCreateUser: (input: {
     hospitalId: number;
     name: string;
@@ -65,10 +74,195 @@ const directoryModes = [
 
 type DirectoryMode = (typeof directoryModes)[number]["value"];
 
+function formatDate(value: string | null) {
+  if (!value) {
+    return "Not set";
+  }
+
+  return new Date(value).toLocaleDateString("en-IE", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function getDaysUntil(value: string) {
+  const deltaMs = new Date(value).getTime() - Date.now();
+  return Math.ceil(deltaMs / (1000 * 60 * 60 * 24));
+}
+
+function getDueStatus(value: string | null) {
+  if (!value) {
+    return {
+      tone: "normal",
+      label: "No due date",
+    } as const;
+  }
+
+  const daysUntil = getDaysUntil(value);
+
+  if (daysUntil < 0) {
+    return {
+      tone: "danger",
+      label: `Overdue by ${Math.abs(daysUntil)} day${
+        Math.abs(daysUntil) === 1 ? "" : "s"
+      }`,
+    } as const;
+  }
+
+  if (daysUntil <= 30) {
+    return {
+      tone: "danger",
+      label: `Due in ${daysUntil} day${daysUntil === 1 ? "" : "s"}`,
+    } as const;
+  }
+
+  return {
+    tone: "normal",
+    label: "In date",
+  } as const;
+}
+
+function getActiveStatus(value: string | null) {
+  if (!value) {
+    return {
+      tone: "muted",
+      label: "No active record",
+    } as const;
+  }
+
+  const daysUntil = getDaysUntil(value);
+
+  if (daysUntil < 0) {
+    return {
+      tone: "danger",
+      label: "Expired",
+    } as const;
+  }
+
+  if (daysUntil <= 30) {
+    return {
+      tone: "danger",
+      label: `Expires in ${daysUntil} day${daysUntil === 1 ? "" : "s"}`,
+    } as const;
+  }
+
+  return {
+    tone: "normal",
+    label: "Active",
+  } as const;
+}
+
+function getRecordSummary(record: TrainingRecordSummary | undefined) {
+  if (!record) {
+    return "No existing record";
+  }
+
+  const statusLabel =
+    record.status === "signedoff"
+      ? "Signed off"
+      : record.status === "submitted"
+        ? "Submitted"
+        : record.status === "expired"
+          ? "Expired"
+          : "Pending";
+
+  const completedReference = record.completed_at || record.submitted_at;
+
+  return `${statusLabel} · ${formatDate(completedReference)}`;
+}
+
+function downloadRecordDocx(detail: TrainingRecordDetail) {
+  downloadTrainingRecordDocument({
+    filename: `${detail.template_name
+      .toLowerCase()
+      .replaceAll(/[^a-z0-9]+/g, "-")
+      .replaceAll(/^-|-$/g, "") || "training-record"}-${detail.id}.docx`,
+    title: detail.template_name,
+    subtitle: `${detail.form_family_reference} · ${detail.department_name} / ${detail.lab_name} · version ${detail.version_number}`,
+    generatedBy: detail.assigned_trainer_name
+      ? `Trainer: ${detail.assigned_trainer_name}`
+      : "Lab Competence Portal",
+    details: [
+      {
+        label: "Trainee",
+        value: detail.trainee_name,
+      },
+      {
+        label: "Trainee email",
+        value: detail.trainee_email,
+      },
+      {
+        label: "Staff type",
+        value: detail.trainee_staff_type.replaceAll("_", " "),
+      },
+      {
+        label: "Hospital",
+        value: detail.trainee_hospital_name,
+      },
+      {
+        label: "Section",
+        value: `${detail.department_name} / ${detail.lab_name}`,
+      },
+      {
+        label: "Status",
+        value: detail.status,
+      },
+      {
+        label: "Trainer / reviewer",
+        value: detail.assigned_trainer_name || "Not assigned",
+      },
+      {
+        label: "Scheduled date",
+        value: formatDate(detail.scheduled_at),
+      },
+      {
+        label: "Completed date",
+        value: formatDate(detail.completed_at),
+      },
+      {
+        label: "Trainee sign date",
+        value: formatDate(detail.trainee_signed_at),
+      },
+      {
+        label: "Submitted date",
+        value: formatDate(detail.submitted_at),
+      },
+      {
+        label: "Expires date",
+        value: formatDate(detail.expires_at),
+      },
+    ],
+    tables: [
+      {
+        title: "Specimen evidence",
+        columns: [
+          "Specimen",
+          "Type",
+          "Analyser / section",
+          "Processed date",
+          "Result summary",
+        ],
+        rows: detail.specimens.map((specimen) => [
+          specimen.specimen_label,
+          specimen.specimen_type || "Not set",
+          specimen.analyser_reference || detail.lab_name,
+          formatDate(specimen.processed_at),
+          specimen.result_summary || "Not set",
+        ]),
+      },
+    ],
+    jsonPayload: detail.assessment_payload_json,
+  });
+}
+
 export function UsersPanel({
   currentUser,
   hospitals,
   users,
+  assignments,
+  records,
+  onFetchRecordDetail,
   onCreateUser,
   onArchiveUser,
 }: UsersPanelProps) {
@@ -81,6 +275,9 @@ export function UsersPanel({
   const [directoryMode, setDirectoryMode] = useState<DirectoryMode>("core");
   const [staffTypeFilter, setStaffTypeFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedRecordUserId, setSelectedRecordUserId] = useState<number | null>(
+    null
+  );
   const [formMessage, setFormMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -133,6 +330,101 @@ export function UsersPanel({
   }, [directoryMode, searchTerm, staffTypeFilter, users]);
 
   const canArchiveUsers = currentUser.role === "admin";
+
+  const selectedRecordUser = useMemo(
+    () => users.find((user) => user.id === selectedRecordUserId) ?? null,
+    [selectedRecordUserId, users]
+  );
+
+  const selectedUserAssignments = useMemo(
+    () =>
+      selectedRecordUserId === null
+        ? []
+        : assignments.filter((assignment) => assignment.user_id === selectedRecordUserId),
+    [assignments, selectedRecordUserId]
+  );
+
+  const selectedUserRecords = useMemo(
+    () =>
+      selectedRecordUserId === null
+        ? []
+        : records.filter((record) => record.trainee_id === selectedRecordUserId),
+    [records, selectedRecordUserId]
+  );
+
+  const selectedUserCompetencyRows = useMemo(() => {
+    const assignmentMap = new Map<number, TrainingAssignmentSummary>();
+    const recordMap = new Map<number, TrainingRecordSummary>();
+
+    selectedUserAssignments.forEach((assignment) => {
+      const existing = assignmentMap.get(assignment.template_id);
+
+      if (!existing || assignment.next_due_at < existing.next_due_at) {
+        assignmentMap.set(assignment.template_id, assignment);
+      }
+    });
+
+    selectedUserRecords.forEach((record) => {
+      const existing = recordMap.get(record.template_id);
+
+      if (
+        !existing ||
+        record.expires_at > existing.expires_at ||
+        record.created_at > existing.created_at
+      ) {
+        recordMap.set(record.template_id, record);
+      }
+    });
+
+    const templateIds = new Set<number>([
+      ...assignmentMap.keys(),
+      ...recordMap.keys(),
+    ]);
+
+    return [...templateIds]
+      .map((templateId) => {
+        const assignment = assignmentMap.get(templateId);
+        const record = recordMap.get(templateId);
+        const dueStatus = getDueStatus(assignment?.next_due_at ?? null);
+        const activeStatus = getActiveStatus(record?.expires_at ?? null);
+        const sectionName = assignment
+          ? `${assignment.department_name} / ${assignment.lab_name}`
+          : record
+            ? `${record.department_name} / ${record.lab_name}`
+            : "Not set";
+
+        return {
+          templateId,
+          templateName: assignment?.template_name || record?.template_name || "Template",
+          sectionName,
+          dueAt: assignment?.next_due_at ?? null,
+          scheduledAt: record?.scheduled_at ?? null,
+          existingRecord: getRecordSummary(record),
+          recordId: record?.id ?? null,
+          activeUntil: record?.expires_at ?? null,
+          dueStatus,
+          activeStatus,
+        };
+      })
+      .sort((left, right) => {
+        const leftRisk =
+          (left.dueStatus.tone === "danger" ? 2 : 0) +
+          (left.activeStatus.tone === "danger" ? 2 : 0);
+        const rightRisk =
+          (right.dueStatus.tone === "danger" ? 2 : 0) +
+          (right.activeStatus.tone === "danger" ? 2 : 0);
+
+        if (leftRisk !== rightRisk) {
+          return rightRisk - leftRisk;
+        }
+
+        if (left.dueAt && right.dueAt) {
+          return left.dueAt.localeCompare(right.dueAt);
+        }
+
+        return left.templateName.localeCompare(right.templateName);
+      });
+  }, [selectedUserAssignments, selectedUserRecords]);
 
   useEffect(() => {
     setStaffTypeFilter("all");
@@ -405,6 +697,13 @@ export function UsersPanel({
                     </p>
                   </div>
                   <div className="tag-stack">
+                    <button
+                      className="button is-link is-light is-small"
+                      type="button"
+                      onClick={() => setSelectedRecordUserId(user.id)}
+                    >
+                      Record
+                    </button>
                     {canArchiveUsers &&
                     user.id !== currentUser.id &&
                     user.is_active ? (
@@ -462,6 +761,154 @@ export function UsersPanel({
           </div>
         </section>
       </div>
+
+      {selectedRecordUser ? (
+        <div
+          className="staff-record-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="staff-record-title"
+          onClick={() => setSelectedRecordUserId(null)}
+        >
+          <section
+            className="staff-record-modal panel-card"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="panel-heading-row">
+              <div>
+                <p className="panel-kicker">Competency record</p>
+                <h2 className="title is-4" id="staff-record-title">
+                  {selectedRecordUser.name}
+                </h2>
+                <p className="list-meta">
+                  {selectedRecordUser.email} ·{" "}
+                  {selectedRecordUser.staff_type.replaceAll("_", " ")}
+                </p>
+              </div>
+
+              <button
+                className="button is-light"
+                type="button"
+                onClick={() => setSelectedRecordUserId(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="staff-record-summary">
+              <div className="staff-record-summary-card">
+                <span>Total competencies</span>
+                <strong>{selectedUserCompetencyRows.length}</strong>
+              </div>
+              <div className="staff-record-summary-card">
+                <span>Due / overdue</span>
+                <strong>
+                  {
+                    selectedUserCompetencyRows.filter(
+                      (row) => row.dueStatus.tone === "danger"
+                    ).length
+                  }
+                </strong>
+              </div>
+              <div className="staff-record-summary-card">
+                <span>Expired / 30 days</span>
+                <strong>
+                  {
+                    selectedUserCompetencyRows.filter(
+                      (row) => row.activeStatus.tone === "danger"
+                    ).length
+                  }
+                </strong>
+              </div>
+            </div>
+
+            {selectedUserCompetencyRows.length === 0 ? (
+              <p className="empty-state">
+                No competency assignments or existing records found for this staff member yet.
+              </p>
+            ) : (
+              <div className="staff-record-table-wrap">
+                <table className="table is-fullwidth staff-record-table">
+                  <thead>
+                    <tr>
+                      <th>Template</th>
+                      <th>Section</th>
+                      <th>Due</th>
+                      <th>Scheduled</th>
+                      <th>Existing</th>
+                      <th>Active date</th>
+                      <th>Active</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedUserCompetencyRows.map((row) => (
+                      <tr key={row.templateId}>
+                        <td>
+                          <strong>{row.templateName}</strong>
+                        </td>
+                        <td>{row.sectionName}</td>
+                        <td>
+                          <div className="staff-record-cell">
+                            <span>{formatDate(row.dueAt)}</span>
+                            <span
+                              className={`staff-record-status is-${row.dueStatus.tone}`}
+                            >
+                              {row.dueStatus.label}
+                            </span>
+                          </div>
+                        </td>
+                        <td>{formatDate(row.scheduledAt)}</td>
+                        <td>
+                          <div className="staff-record-existing-cell">
+                            <span>{row.existingRecord}</span>
+                            {row.recordId ? (
+                              <button
+                                className="button is-small is-light"
+                                type="button"
+                                onClick={() => {
+                                  void onFetchRecordDetail(row.recordId!)
+                                    .then(({ record }) => {
+                                      downloadRecordDocx(record);
+                                    })
+                                    .catch((error) => {
+                                      window.alert(
+                                        error instanceof Error
+                                          ? error.message
+                                          : "Unable to load printable record"
+                                      );
+                                    });
+                                }}
+                              >
+                                Download DOCX
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td
+                          className={
+                            row.activeStatus.tone === "danger"
+                              ? "staff-record-date-danger"
+                              : undefined
+                          }
+                        >
+                          {formatDate(row.activeUntil)}
+                        </td>
+                        <td>
+                          <span
+                            className={`staff-record-status is-${row.activeStatus.tone}`}
+                          >
+                            {row.activeStatus.label}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }

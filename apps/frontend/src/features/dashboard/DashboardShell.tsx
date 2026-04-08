@@ -618,6 +618,9 @@ export function DashboardShell({
             currentUser={currentUser}
             hospitals={hospitals}
             users={users}
+            assignments={assignments}
+            records={records}
+            onFetchRecordDetail={onFetchRecordDetail}
             onCreateUser={onCreateUser}
             onArchiveUser={onArchiveUser}
           />

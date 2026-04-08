@@ -67,7 +67,7 @@ Stores child sections/devices under a parent lab.
 
 Examples:
 
-- Biochemistry -> Mass Spectrometry
+- Biochemistry -> Clinical Biochemistry
 - Biochemistry -> AU5800
 - Point of Care -> Blood Gas
 - Point of Care -> Glucose Meter

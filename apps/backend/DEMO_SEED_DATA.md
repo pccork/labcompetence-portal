@@ -16,14 +16,13 @@ All demo users use the password `password123`.
 | Demo Portal Admin         | portal.admin@example.test         | Biochem20173! | admin   | training_coordinator     | Anonymised global admin account                         |
 | Demo Training Coordinator | training.coordinator@example.test | Biochem20173! | admin   | training_coordinator     | Anonymised biochemistry/core-lab co-ordinator           |
 | Demo POCT Coordinator     | poct.coordinator@example.test     | Biochem20173! | admin   | training_coordinator     | Anonymised POCT-only co-ordinator for Blood Gas/Glucose |
-| Demo Section Trainer      | section.trainer@example.test      | Biochem20173! | trainer | senior_medical_scientist | Anonymised Mass Spectrometry section trainer            |
+| Demo Section Trainer      | section.trainer@example.test      | Biochem20173! | trainer | senior_medical_scientist | Anonymised biochemistry section trainer                 |
 | Demo Scientist Trainee    | scientist.trainee@example.test    | Biochem20173! | staff   | basic_grade_scientist    | Anonymised medical scientist trainee                    |
 
 ## Demo sections / training units
 
 The seed script creates a parent department **Biochemistry** with child training units seeded from the non-POCT sample forms:
 
-- Mass Spectrometry
 - AU5800 Clinical Chemistry
 - IDS-i10
 - DXA 5000
@@ -44,9 +43,6 @@ The **Blood Gas** POCT unit now includes anonymised demo templates for:
 
 | Training Unit             | Template Name                                                      | Target Staff Type        | Template Kind                  | Owner                     |
 | ------------------------- | ------------------------------------------------------------------ | ------------------------ | ------------------------------ | ------------------------- |
-| Mass Spectrometry         | FOR-CUH-PAT-2 Mass Spectrometry Steroid Panel                      | basic_grade_scientist    | training_event_competency      | Demo Section Trainer      |
-| Mass Spectrometry         | FOR-CUH-PAT-2 Mass Spectrometry TDM Review                         | basic_grade_scientist    | training_event_competency      | Demo Section Trainer      |
-| Mass Spectrometry         | FOR-CUH-PAT-2 Mass Spectrometry Senior Trainer Review              | senior_medical_scientist | senior_staff_programme         | Demo Training Coordinator |
 | AU5800 Clinical Chemistry | FOR-CUH-PAT-2 Clinical Chemistry AU5800                            | basic_grade_scientist    | training_event_competency      | Demo Section Trainer      |
 | IDS-i10                   | FOR-CUH-PAT-2 IDS-i10                                              | basic_grade_scientist    | training_event_competency      | Demo Section Trainer      |
 | DXA 5000                  | FOR-CUH-PAT-2 Beckman Coulter DXA 5000 Competency                  | basic_grade_scientist    | competency_only                | Demo Section Trainer      |
@@ -63,10 +59,6 @@ The **Blood Gas** POCT unit now includes anonymised demo templates for:
 
 | Trainee                | Template                                | Trainer                   | Status    | Demo Notes                                                            |
 | ---------------------- | --------------------------------------- | ------------------------- | --------- | --------------------------------------------------------------------- |
-| Demo Scientist Trainee | Mass Spectrometry Steroid Panel         | Demo Section Trainer      | signedoff | Includes two specimen evidence examples and completed checklist notes |
-| Demo Scientist Trainee | Mass Spectrometry TDM Review            | Demo Section Trainer      | pending   | Upcoming refresher record with one demo specimen placeholder          |
-| Demo Section Trainer   | Mass Spectrometry Senior Trainer Review | Demo Training Coordinator | signedoff | Demonstrates that a trainer can also have their own training record   |
-
 ## What to check in the UI
 
 - Log in as **Demo Training Coordinator** to review biochemistry/core-lab co-ordinator access.
@@ -76,7 +68,7 @@ The **Blood Gas** POCT unit now includes anonymised demo templates for:
 - Open **Sections** and select each Biochemistry training unit.
 - Open **Templates** to see the seeded FOR-CUH-PAT-2 templates from the non-POCT sample forms.
 - Open **Due training** to see due dates for the anonymised demo users.
-- Open **Records** to see signed-off and pending Mass Spectrometry demo records.
+- Open **Records** to see the seeded demo training records.
 
 ## Private overlay
 
