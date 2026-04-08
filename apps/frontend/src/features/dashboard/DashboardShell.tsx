@@ -3,11 +3,13 @@ import { useMemo, useState } from "react";
 import { CurrentUser } from "../auth/api";
 import {
   CreateTrainingAssignmentInput,
+  CreateDepartmentInput,
   CreateLabInput,
   CreatePocRegistrationLinkInput,
   CreateTrainingRecordInput,
   CreateTemplateInput,
   HospitalSummary,
+  DepartmentSummary,
   LabSummary,
   PocRegistrationLinkSummary,
   PocTrainingRequestSummary,
@@ -39,6 +41,7 @@ import { getAccountScopeLabel } from "./components/roleLabels";
 interface DashboardShellProps {
   currentUser: CurrentUser;
   hospitals: HospitalSummary[];
+  departments: DepartmentSummary[];
   users: UserSummary[];
   labs: LabSummary[];
   templates: TemplateSummary[];
@@ -56,10 +59,16 @@ interface DashboardShellProps {
     staffType: string;
   }) => Promise<void>;
   onCreateHospital: (input: { name: string }) => Promise<void>;
+  onCreateDepartment: (input: CreateDepartmentInput) => Promise<void>;
+  onArchiveDepartment: (departmentId: number) => Promise<void>;
+  onDeleteDepartment: (departmentId: number) => Promise<void>;
   onCreateLab: (input: CreateLabInput) => Promise<void>;
+  onArchiveLab: (labId: number) => Promise<void>;
+  onDeleteLab: (labId: number) => Promise<void>;
   onArchiveUser: (userId: number) => Promise<void>;
   onCreateTemplate: (input: CreateTemplateInput) => Promise<void>;
   onArchiveTemplate: (template: TemplateSummary) => Promise<void>;
+  onDeleteTemplate: (templateId: number) => Promise<void>;
   onFetchTemplateDetail: (
     templateId: number,
   ) => Promise<{ template: TemplateDetail }>;
@@ -109,6 +118,7 @@ function getDaysUntil(value: string) {
 export function DashboardShell({
   currentUser,
   hospitals,
+  departments,
   users,
   labs,
   templates,
@@ -119,10 +129,16 @@ export function DashboardShell({
   onRefresh,
   onCreateUser,
   onCreateHospital,
+  onCreateDepartment,
+  onArchiveDepartment,
+  onDeleteDepartment,
   onCreateLab,
+  onArchiveLab,
+  onDeleteLab,
   onArchiveUser,
   onCreateTemplate,
   onArchiveTemplate,
+  onDeleteTemplate,
   onFetchTemplateDetail,
   onCreateAssignment,
   onCreateRecord,
@@ -415,9 +431,13 @@ export function DashboardShell({
             <GlobalAdminOverviewPanel
               currentUser={currentUser}
               hospitals={hospitals}
+              departments={departments}
               labs={labs}
               users={users}
               onCreateHospital={onCreateHospital}
+              onCreateDepartment={onCreateDepartment}
+              onArchiveDepartment={onArchiveDepartment}
+              onDeleteDepartment={onDeleteDepartment}
             />
           ) : (
             <section className="columns is-multiline">
@@ -495,6 +515,7 @@ export function DashboardShell({
                   showFormLibrary
                   onCreateTemplate={onCreateTemplate}
                   onArchiveTemplate={onArchiveTemplate}
+                  onDeleteTemplate={onDeleteTemplate}
                   onFetchTemplateDetail={onFetchTemplateDetail}
                 />
               </div>
@@ -505,8 +526,10 @@ export function DashboardShell({
                   labs={labs}
                   selectedLabId={selectedLabId}
                   onSelectLab={setSelectedLabId}
-                  onCreateLab={onCreateLab}
-                  showCreateSection={false}
+                    onCreateLab={onCreateLab}
+                    onArchiveLab={onArchiveLab}
+                    onDeleteLab={onDeleteLab}
+                    showCreateSection={false}
                   showLabSections
                 />
               </div>
@@ -521,6 +544,7 @@ export function DashboardShell({
                     showFormLibrary={false}
                     onCreateTemplate={onCreateTemplate}
                     onArchiveTemplate={onArchiveTemplate}
+                    onDeleteTemplate={onDeleteTemplate}
                     onFetchTemplateDetail={onFetchTemplateDetail}
                   />
                 </div>
@@ -530,10 +554,13 @@ export function DashboardShell({
                   <LabsPanel
                     currentUser={currentUser}
                     hospitals={hospitals}
+                    departments={departments}
                     labs={labs}
                     selectedLabId={selectedLabId}
                     onSelectLab={setSelectedLabId}
                     onCreateLab={onCreateLab}
+                    onArchiveLab={onArchiveLab}
+                    onDeleteLab={onDeleteLab}
                     showCreateSection
                     showLabSections={false}
                   />
@@ -585,6 +612,7 @@ export function DashboardShell({
             isReadOnly={isBasicGradeStandardUser}
             onCreateTemplate={onCreateTemplate}
             onArchiveTemplate={onArchiveTemplate}
+            onDeleteTemplate={onDeleteTemplate}
             onFetchTemplateDetail={onFetchTemplateDetail}
           />
         ) : null}
@@ -597,6 +625,7 @@ export function DashboardShell({
             isReadOnly
             onCreateTemplate={onCreateTemplate}
             onArchiveTemplate={onArchiveTemplate}
+            onDeleteTemplate={onDeleteTemplate}
             onFetchTemplateDetail={onFetchTemplateDetail}
           />
         ) : null}
@@ -618,18 +647,25 @@ export function DashboardShell({
             <GlobalAdminOverviewPanel
               currentUser={currentUser}
               hospitals={hospitals}
+              departments={departments}
               labs={labs}
               users={users}
               onCreateHospital={onCreateHospital}
+              onCreateDepartment={onCreateDepartment}
+              onArchiveDepartment={onArchiveDepartment}
+              onDeleteDepartment={onDeleteDepartment}
             />
           ) : (
             <LabsPanel
               currentUser={currentUser}
               hospitals={hospitals}
+              departments={departments}
               labs={labs}
               selectedLabId={selectedLabId}
               onSelectLab={setSelectedLabId}
               onCreateLab={onCreateLab}
+              onArchiveLab={onArchiveLab}
+              onDeleteLab={onDeleteLab}
             />
           )
         ) : null}

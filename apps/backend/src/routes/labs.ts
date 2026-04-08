@@ -1,7 +1,5 @@
 import { FastifyPluginAsync } from "fastify";
 import {
-  DEFAULT_CORE_DEPARTMENTS,
-  POINT_OF_CARE_DEPARTMENT,
   Role,
   StaffType,
 } from "shared-types";
@@ -14,10 +12,12 @@ import {
 } from "../services/access-policy-service";
 import { findHospitalById } from "../services/hospital-service";
 import {
+  archiveLab,
   createLab,
   deleteLab,
   findDepartmentById,
   findLabById,
+  getLabUsage,
   listLabs,
   updateLab,
 } from "../services/lab-service";
@@ -53,19 +53,6 @@ function canCreateLabsForOwnScope(input: {
   return (
     input.staffType === StaffType.TRAINING_COORDINATOR ||
     input.staffType === StaffType.SENIOR_MEDICAL_SCIENTIST
-  );
-}
-
-function isAllowedLocalDepartmentName(
-  departmentName: string,
-  isPoc: boolean,
-) {
-  if (isPoc) {
-    return departmentName === POINT_OF_CARE_DEPARTMENT;
-  }
-
-  return DEFAULT_CORE_DEPARTMENTS.includes(
-    departmentName as (typeof DEFAULT_CORE_DEPARTMENTS)[number],
   );
 }
 
@@ -175,36 +162,16 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
           departmentId !== null
             ? await findDepartmentById(fastify.db, departmentId)
             : null;
-        const effectiveDepartmentName =
-          selectedDepartment?.name ?? departmentName ?? null;
-        const effectiveIsPoc = selectedDepartment?.is_poc ?? isPoc;
 
         if (
-          selectedDepartment &&
+          !selectedDepartment ||
           selectedDepartment.hospital_id !== hospitalId
         ) {
           return reply.status(403).send({
-            message: "Department does not belong to the selected hospital",
+            message: "Select an existing department for this hospital",
           });
         }
 
-        if (!effectiveDepartmentName) {
-          return reply.status(400).send({
-            message: "Department selection is required",
-          });
-        }
-
-        if (
-          !isAllowedLocalDepartmentName(
-            effectiveDepartmentName,
-            effectiveIsPoc,
-          )
-        ) {
-          return reply.status(403).send({
-            message:
-              "Local setup can only create sections in approved departments",
-          });
-        }
       }
 
       try {
@@ -398,9 +365,33 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
           });
         }
 
-        if (!scope.canAccessAllHospitals) {
+        const currentUser = await findUserById(fastify.db, Number(request.user.id));
+
+        if (
+          !currentUser ||
+          !canCreateLabsForOwnScope({
+            role: request.user.role,
+            staffType: currentUser.staff_type,
+            isGlobalAdmin: currentUser.is_global_admin,
+          })
+        ) {
           return reply.status(403).send({
-            message: "Only a global admin can delete sections",
+            message: "You cannot delete sections in this scope",
+          });
+        }
+
+        const usage = await getLabUsage(fastify.db, labId);
+
+        if (
+          (usage?.template_count ?? 0) > 0 ||
+          (usage?.assignment_count ?? 0) > 0 ||
+          (usage?.record_count ?? 0) > 0 ||
+          (usage?.poc_link_count ?? 0) > 0 ||
+          (usage?.poc_request_count ?? 0) > 0
+        ) {
+          return reply.status(409).send({
+            message:
+              "This section cannot be deleted because linked templates, records, assignments, or other related data already exist. Archive the linked templates first, then archive this section instead of deleting it.",
           });
         }
 
@@ -422,6 +413,76 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
 
         throw error;
       }
+    },
+  );
+
+  fastify.patch<LabParams>(
+    "/labs/:id/archive",
+    {
+      preHandler: [fastify.authenticate, fastify.requireRole(Role.ADMIN)],
+    },
+    async (request, reply) => {
+      const labId = Number(request.params.id);
+
+      if (!Number.isInteger(labId) || labId <= 0) {
+        return reply.status(400).send({ message: "Invalid lab id" });
+      }
+
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id),
+      );
+      const currentUser = await findUserById(fastify.db, Number(request.user.id));
+
+      if (!scope || !currentUser) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      const existingLab = await findLabById(fastify.db, labId);
+
+      if (!existingLab) {
+        return reply.status(404).send({ message: "Training unit not found" });
+      }
+
+      if (
+        !canAccessTrainingUnit(
+          scope,
+          existingLab.id,
+          existingLab.hospital_id,
+          existingLab.is_poc,
+        ) ||
+        !canCreateLabsForOwnScope({
+          role: request.user.role,
+          staffType: currentUser.staff_type,
+          isGlobalAdmin: currentUser.is_global_admin,
+        })
+      ) {
+        return reply.status(403).send({
+          message: "You cannot archive sections in this scope",
+        });
+      }
+
+      const usage = await getLabUsage(fastify.db, labId);
+
+      if (
+        (usage?.active_template_count ?? 0) > 0 ||
+        (usage?.active_record_count ?? 0) > 0
+      ) {
+        return reply.status(409).send({
+          message:
+            "This section cannot be archived while active templates or active training records still exist. Archive each template in this section first. Linked training records will be archived with their template.",
+        });
+      }
+
+      const archived = await archiveLab(fastify.db, labId);
+
+      if (!archived) {
+        return reply.status(404).send({ message: "Training unit not found" });
+      }
+
+      await maybeAutoSyncPrivateSeed(fastify.db);
+
+      return { archived: true };
     },
   );
 };

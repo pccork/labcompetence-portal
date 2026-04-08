@@ -1,0 +1,13 @@
+ALTER TABLE labs
+ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+
+UPDATE labs
+SET is_active = TRUE
+WHERE is_active IS NULL;
+
+ALTER TABLE training_units
+ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+
+UPDATE training_units
+SET is_active = TRUE
+WHERE is_active IS NULL;

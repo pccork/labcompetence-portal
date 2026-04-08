@@ -6,6 +6,7 @@ import postgresPlugin from "./plugins/postgres";
 import authPlugin from "./plugins/auth";
 import emailPlugin from "./plugins/email";
 import authRoutes from "./routes/auth";
+import departmentRoutes from "./routes/departments";
 import hospitalRoutes from "./routes/hospitals";
 import labRoutes from "./routes/labs";
 import pocRegistrationRoutes from "./routes/poc-registration";
@@ -56,6 +57,7 @@ export async function buildServer() {
   await app.register(authPlugin);
   await app.register(emailPlugin);
   await app.register(authRoutes);
+  await app.register(departmentRoutes);
   await app.register(hospitalRoutes);
   await app.register(userRoutes);
   await app.register(labRoutes);

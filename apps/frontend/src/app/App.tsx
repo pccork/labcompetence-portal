@@ -15,18 +15,27 @@ import {
   getPendingMicrosoftAuth,
 } from "../features/auth/microsoftAuth";
 import {
+  archiveDepartmentRecord,
+  archiveLabSection,
   archiveUserAccount,
+  createDepartmentRecord,
   createHospital,
   createLabSection,
+  CreateDepartmentInput,
+  deleteDepartmentRecord,
+  deleteLabSection,
+  deleteTemplateRecord,
   createPocRegistrationLink,
   createTrainingAssignment,
   createTrainingRecord,
   createTemplate,
+  DepartmentSummary,
   CreateTrainingAssignmentInput,
   CreatePocRegistrationLinkInput,
   CreateTrainingRecordInput,
   CreateTemplateInput,
   createUserAccount,
+  fetchDepartments,
   fetchPocRegistrationLinks,
   fetchPocTrainingRequests,
   fetchHospitals,
@@ -65,6 +74,7 @@ export function App() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [labs, setLabs] = useState<LabSummary[]>([]);
   const [hospitals, setHospitals] = useState<HospitalSummary[]>([]);
+  const [departments, setDepartments] = useState<DepartmentSummary[]>([]);
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
   const [registrationLinks, setRegistrationLinks] = useState<
@@ -99,6 +109,7 @@ export function App() {
 
       const commonRequests = await Promise.all([
         fetchHospitals(activeToken),
+        fetchDepartments(activeToken),
         fetchUsers(activeToken),
         fetchLabs(activeToken),
         fetchTemplates(activeToken),
@@ -106,6 +117,7 @@ export function App() {
 
       const [
         hospitalsResponse,
+        departmentsResponse,
         usersResponse,
         labsResponse,
         templatesResponse,
@@ -143,6 +155,7 @@ export function App() {
 
       setCurrentUser(me.user);
       setHospitals(hospitalsResponse.hospitals);
+      setDepartments(departmentsResponse.departments);
       setUsers(usersResponse.users);
       setLabs(labsResponse.labs);
       setTemplates(templatesResponse.templates);
@@ -295,6 +308,7 @@ export function App() {
     setToken(null);
     setCurrentUser(null);
     setHospitals([]);
+    setDepartments([]);
     setUsers([]);
     setLabs([]);
     setTemplates([]);
@@ -328,6 +342,7 @@ export function App() {
     <DashboardShell
       currentUser={currentUser}
       hospitals={hospitals}
+      departments={departments}
       users={users}
       labs={labs}
       templates={templates}
@@ -348,8 +363,28 @@ export function App() {
         await createHospital(token, input);
         await loadDashboard(token);
       }}
+      onCreateDepartment={async (input: CreateDepartmentInput) => {
+        await createDepartmentRecord(token, input);
+        await loadDashboard(token);
+      }}
+      onArchiveDepartment={async (departmentId: number) => {
+        await archiveDepartmentRecord(token, departmentId);
+        await loadDashboard(token);
+      }}
+      onDeleteDepartment={async (departmentId: number) => {
+        await deleteDepartmentRecord(token, departmentId);
+        await loadDashboard(token);
+      }}
       onCreateLab={async (input) => {
         await createLabSection(token, input);
+        await loadDashboard(token);
+      }}
+      onArchiveLab={async (labId: number) => {
+        await archiveLabSection(token, labId);
+        await loadDashboard(token);
+      }}
+      onDeleteLab={async (labId: number) => {
+        await deleteLabSection(token, labId);
         await loadDashboard(token);
       }}
       onArchiveUser={async (userId: number) => {
@@ -370,6 +405,10 @@ export function App() {
           isActive: false,
           schemaJson: {},
         });
+        await loadDashboard(token);
+      }}
+      onDeleteTemplate={async (templateId: number) => {
+        await deleteTemplateRecord(token, templateId);
         await loadDashboard(token);
       }}
       onFetchTemplateDetail={(templateId: number) =>

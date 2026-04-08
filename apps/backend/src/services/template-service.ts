@@ -271,38 +271,67 @@ export async function updateTemplate(
     isActive: boolean;
   }
 ) {
-  const result = await db.query<{ id: number }>(
-    `
-    UPDATE templates
-    SET
-      name = $2,
-      lab_id = (SELECT lab_id FROM training_units WHERE id = $3),
-      training_unit_id = $3,
-      form_family_reference = $4,
-      template_kind = $5,
-      target_staff_type = $6,
-      is_active = $7
-    WHERE id = $1
-    RETURNING id
-    `,
-    [
-      input.templateId,
-      input.name,
-      input.labId,
-      input.formFamilyReference,
-      input.templateKind,
-      input.targetStaffType,
-      input.isActive,
-    ]
-  );
+  const client = await db.connect();
 
-  const templateId = result.rows[0]?.id;
+  try {
+    await client.query("BEGIN");
 
-  if (!templateId) {
-    return undefined;
+    const result = await client.query<{ id: number }>(
+      `
+      UPDATE templates
+      SET
+        name = $2,
+        lab_id = (SELECT lab_id FROM training_units WHERE id = $3),
+        training_unit_id = $3,
+        form_family_reference = $4,
+        template_kind = $5,
+        target_staff_type = $6,
+        is_active = $7
+      WHERE id = $1
+      RETURNING id
+      `,
+      [
+        input.templateId,
+        input.name,
+        input.labId,
+        input.formFamilyReference,
+        input.templateKind,
+        input.targetStaffType,
+        input.isActive,
+      ]
+    );
+
+    const templateId = result.rows[0]?.id;
+
+    if (!templateId) {
+      await client.query("ROLLBACK");
+      return undefined;
+    }
+
+    if (!input.isActive) {
+      await client.query(
+        `
+        UPDATE training_records
+        SET is_active = false
+        WHERE template_version_id IN (
+          SELECT id
+          FROM template_versions
+          WHERE template_id = $1
+        )
+        `,
+        [templateId]
+      );
+    }
+
+    await client.query("COMMIT");
+
+    return findTemplateById(db, templateId);
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
-
-  return findTemplateById(db, templateId);
 }
 
 export async function createTemplateVersion(
@@ -345,4 +374,44 @@ export async function createTemplateVersion(
   }
 
   return template;
+}
+
+export async function getTemplateUsage(
+  db: Pool,
+  templateId: number
+) {
+  const result = await db.query<{
+    assignment_count: number;
+    record_count: number;
+  }>(
+    `
+    SELECT
+      COUNT(DISTINCT ta.id) AS assignment_count,
+      COUNT(DISTINCT tr.id) AS record_count
+    FROM templates t
+    LEFT JOIN training_assignments ta ON ta.template_id = t.id
+    LEFT JOIN template_versions tv ON tv.template_id = t.id
+    LEFT JOIN training_records tr ON tr.template_version_id = tv.id
+    WHERE t.id = $1
+    `,
+    [templateId]
+  );
+
+  return result.rows[0];
+}
+
+export async function deleteTemplate(
+  db: Pool,
+  templateId: number
+) {
+  const result = await db.query<{ id: number }>(
+    `
+    DELETE FROM templates
+    WHERE id = $1
+    RETURNING id
+    `,
+    [templateId]
+  );
+
+  return result.rows[0];
 }

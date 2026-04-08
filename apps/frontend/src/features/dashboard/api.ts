@@ -6,6 +6,16 @@ export interface HospitalSummary {
   created_at: string;
 }
 
+export interface DepartmentSummary {
+  id: number;
+  hospital_id: number;
+  hospital_name: string;
+  name: string;
+  is_poc: boolean;
+  is_active: boolean;
+  created_at: string;
+}
+
 export interface UserSummary {
   id: number;
   hospital_id: number;
@@ -27,6 +37,7 @@ export interface LabSummary {
   hospital_name: string;
   name: string;
   is_poc: boolean;
+  is_active: boolean;
 }
 
 export interface TemplateSummary {
@@ -172,7 +183,14 @@ export interface CreateHospitalInput {
 
 export interface CreateLabInput {
   hospitalId: number;
+  departmentId?: number;
   departmentName?: string;
+  name: string;
+  isPoc?: boolean;
+}
+
+export interface CreateDepartmentInput {
+  hospitalId: number;
   name: string;
   isPoc?: boolean;
 }
@@ -249,6 +267,14 @@ export async function fetchHospitals(token: string) {
   return apiRequest<{ hospitals: HospitalSummary[] }>("/hospitals", {}, token);
 }
 
+export async function fetchDepartments(token: string) {
+  return apiRequest<{ departments: DepartmentSummary[] }>(
+    "/departments",
+    {},
+    token
+  );
+}
+
 export async function fetchPublicHospitals() {
   return apiRequest<{ hospitals: HospitalSummary[] }>("/poc/hospitals");
 }
@@ -267,6 +293,40 @@ export async function createHospital(
   );
 }
 
+export async function createDepartmentRecord(
+  token: string,
+  input: CreateDepartmentInput
+) {
+  return apiRequest<{ department: DepartmentSummary }>(
+    "/departments",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token
+  );
+}
+
+export async function archiveDepartmentRecord(token: string, departmentId: number) {
+  return apiRequest<{ archived: boolean }>(
+    `/departments/${departmentId}/archive`,
+    {
+      method: "PATCH",
+    },
+    token
+  );
+}
+
+export async function deleteDepartmentRecord(token: string, departmentId: number) {
+  return apiRequest<{ deleted: boolean }>(
+    `/departments/${departmentId}`,
+    {
+      method: "DELETE",
+    },
+    token
+  );
+}
+
 export async function fetchUsers(token: string) {
   return apiRequest<{ users: UserSummary[] }>("/users", {}, token);
 }
@@ -280,6 +340,26 @@ export async function createLabSection(
     {
       method: "POST",
       body: JSON.stringify(input),
+    },
+    token
+  );
+}
+
+export async function archiveLabSection(token: string, labId: number) {
+  return apiRequest<{ archived: boolean }>(
+    `/labs/${labId}/archive`,
+    {
+      method: "PATCH",
+    },
+    token
+  );
+}
+
+export async function deleteLabSection(token: string, labId: number) {
+  return apiRequest<{ deleted: boolean }>(
+    `/labs/${labId}`,
+    {
+      method: "DELETE",
     },
     token
   );
@@ -341,6 +421,16 @@ export async function createTemplate(
     {
       method: "POST",
       body: JSON.stringify(input),
+    },
+    token
+  );
+}
+
+export async function deleteTemplateRecord(token: string, templateId: number) {
+  return apiRequest<{ deleted: boolean }>(
+    `/templates/${templateId}`,
+    {
+      method: "DELETE",
     },
     token
   );

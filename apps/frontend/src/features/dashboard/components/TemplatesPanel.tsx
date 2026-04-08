@@ -23,6 +23,7 @@ interface TemplatesPanelProps {
   isReadOnly?: boolean;
   onCreateTemplate: (input: CreateTemplateInput) => Promise<void>;
   onArchiveTemplate: (template: TemplateSummary) => Promise<void>;
+  onDeleteTemplate: (templateId: number) => Promise<void>;
   onFetchTemplateDetail: (
     templateId: number
   ) => Promise<{ template: TemplateDetail }>;
@@ -80,6 +81,7 @@ export function TemplatesPanel({
   isReadOnly = false,
   onCreateTemplate,
   onArchiveTemplate,
+  onDeleteTemplate,
   onFetchTemplateDetail,
   showTemplateSetup = true,
   showFormLibrary = true,
@@ -870,6 +872,37 @@ export function TemplatesPanel({
                   </div>
 
                   <div className="tag-stack">
+                    {!isReadOnly ? (
+                      <button
+                        className="button is-danger is-small"
+                        type="button"
+                        onClick={() => {
+                          setPrintMessage(null);
+
+                          const confirmed = confirmManagedAction(
+                            currentUser,
+                            `Delete template "${template.name}"? This only works when there are no linked assignments or training records.`,
+                            "If linked data exists, delete will be blocked and you should archive the template instead. Please confirm again to continue."
+                          );
+
+                          if (!confirmed) {
+                            return;
+                          }
+
+                          startTransition(() => {
+                            void onDeleteTemplate(template.id).catch((error) => {
+                              setPrintMessage(
+                                error instanceof Error
+                                  ? error.message
+                                  : "Unable to delete template"
+                              );
+                            });
+                          });
+                        }}
+                      >
+                        Delete
+                      </button>
+                    ) : null}
                     {template.is_active && !isReadOnly ? (
                       <button
                         className="button is-danger is-light is-small"
@@ -879,8 +912,8 @@ export function TemplatesPanel({
 
                           const confirmed = confirmManagedAction(
                             currentUser,
-                            `Archive template "${template.name}"? It will stay in the system for record history but stop appearing as an active template.`,
-                            "Please confirm again to archive this template."
+                            `Archive template "${template.name}"? Linked training records for this template will be archived with it, and the template will stop appearing for new training.`,
+                            "Please confirm again to archive this template and its linked training records."
                           );
 
                           if (!confirmed) {

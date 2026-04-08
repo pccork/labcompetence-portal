@@ -10,9 +10,11 @@ import {
 import { findLabById } from "../services/lab-service";
 import {
   createTemplateVersion,
+  deleteTemplate,
   createTemplateWithInitialVersion,
   findTemplateById,
   findTemplateHospitalScopeById,
+  getTemplateUsage,
   listTemplates,
   updateTemplate,
 } from "../services/template-service";
@@ -451,6 +453,84 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
       await maybeAutoSyncPrivateSeed(fastify.db);
 
       return reply.status(201).send({ template });
+    },
+  );
+
+  fastify.delete<TemplateParams>(
+    "/templates/:id",
+    {
+      preHandler: [
+        fastify.authenticate,
+        fastify.requireAnyRole([Role.ADMIN, Role.TRAINER, Role.STAFF]),
+      ],
+    },
+    async (request, reply) => {
+      const templateId = Number(request.params.id);
+
+      if (!Number.isInteger(templateId) || templateId <= 0) {
+        return reply.status(400).send({ message: "Invalid template id" });
+      }
+
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id),
+      );
+      const currentUser = await findUserById(fastify.db, Number(request.user.id));
+
+      if (!scope || !currentUser) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      if (
+        !hasTemplateManagerAccess({
+          role: request.user.role,
+          staffType: currentUser.staff_type,
+          isGlobalAdmin: currentUser.is_global_admin,
+        })
+      ) {
+        return reply.status(403).send({ message: "Forbidden" });
+      }
+
+      const existingTemplateScope = await findTemplateHospitalScopeById(
+        fastify.db,
+        templateId,
+      );
+
+      if (!existingTemplateScope) {
+        return reply.status(404).send({ message: "Template not found" });
+      }
+
+      if (
+        !canAccessTrainingUnit(
+          scope,
+          existingTemplateScope.lab_id,
+          existingTemplateScope.hospital_id,
+          existingTemplateScope.is_poc,
+        )
+      ) {
+        return reply.status(403).send({
+          message: "You cannot delete templates from this section",
+        });
+      }
+
+      const usage = await getTemplateUsage(fastify.db, templateId);
+
+      if ((usage?.assignment_count ?? 0) > 0 || (usage?.record_count ?? 0) > 0) {
+        return reply.status(409).send({
+          message:
+            "This template cannot be deleted because assignments or training records already exist. Archive it instead so record history is preserved.",
+        });
+      }
+
+      const deleted = await deleteTemplate(fastify.db, templateId);
+
+      if (!deleted) {
+        return reply.status(404).send({ message: "Template not found" });
+      }
+
+      await maybeAutoSyncPrivateSeed(fastify.db);
+
+      return { deleted: true };
     },
   );
 };

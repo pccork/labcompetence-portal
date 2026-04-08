@@ -3,28 +3,22 @@ import { useEffect, useState, useTransition } from "react";
 import { CurrentUser } from "../../auth/api";
 import {
   CreateLabInput,
+  DepartmentSummary,
   HospitalSummary,
   LabSummary,
 } from "../api";
 import { confirmManagedAction } from "./managementConfirm";
 
-const DEFAULT_CORE_DEPARTMENTS = [
-  "Biochemistry",
-  "Microbiology",
-  "Virology",
-  "Haematology",
-  "Histology",
-] as const;
-
-const POINT_OF_CARE_DEPARTMENT = "Point of Care";
-
 interface LabsPanelProps {
   currentUser?: CurrentUser;
   hospitals?: HospitalSummary[];
+  departments?: DepartmentSummary[];
   labs: LabSummary[];
   selectedLabId: number | "all";
   onSelectLab: (labId: number | "all") => void;
   onCreateLab?: (input: CreateLabInput) => Promise<void>;
+  onArchiveLab?: (labId: number) => Promise<void>;
+  onDeleteLab?: (labId: number) => Promise<void>;
   showCreateSection?: boolean;
   showLabSections?: boolean;
 }
@@ -32,23 +26,28 @@ interface LabsPanelProps {
 export function LabsPanel({
   currentUser,
   hospitals = [],
+  departments = [],
   labs,
   selectedLabId,
   onSelectLab,
   onCreateLab,
+  onArchiveLab,
+  onDeleteLab,
   showCreateSection = true,
   showLabSections = true,
 }: LabsPanelProps) {
-  const hasPoctOnlyScope = labs.length > 0 && labs.every((lab) => lab.is_poc);
-  const departmentOptions = hasPoctOnlyScope
-    ? [POINT_OF_CARE_DEPARTMENT]
-    : [...DEFAULT_CORE_DEPARTMENTS];
-  const defaultDepartmentName = departmentOptions[0] ?? "";
-  const defaultIsPoc = defaultDepartmentName === POINT_OF_CARE_DEPARTMENT;
   const [hospitalId, setHospitalId] = useState(() => hospitals[0]?.id || 1);
-  const [departmentName, setDepartmentName] = useState(defaultDepartmentName);
+  const availableDepartments = departments.filter(
+    (department) => department.hospital_id === hospitalId
+  );
+  const defaultDepartmentId = availableDepartments[0]?.id ?? null;
+  const [departmentId, setDepartmentId] = useState<number | null>(
+    defaultDepartmentId
+  );
+  const selectedDepartment =
+    availableDepartments.find((department) => department.id === departmentId) ??
+    null;
   const [sectionName, setSectionName] = useState("");
-  const [isPoc, setIsPoc] = useState(defaultIsPoc);
   const [formMessage, setFormMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const canManageSectionsByStaffType =
@@ -60,21 +59,18 @@ export function LabsPanel({
     ((currentUser.role === "admin" && !currentUser.is_global_admin) ||
       canManageSectionsByStaffType) &&
     !!onCreateLab;
+  const selectedLab =
+    selectedLabId === "all"
+      ? null
+      : labs.find((lab) => lab.id === selectedLabId) ?? null;
 
   useEffect(() => {
-    const allowedDepartmentOptions = hasPoctOnlyScope
-      ? [POINT_OF_CARE_DEPARTMENT]
-      : [...DEFAULT_CORE_DEPARTMENTS];
-
-    setDepartmentName((currentDepartmentName: string) =>
-      allowedDepartmentOptions.includes(
-        currentDepartmentName as (typeof allowedDepartmentOptions)[number]
-      )
-        ? currentDepartmentName
-        : defaultDepartmentName
+    setDepartmentId((currentDepartmentId) =>
+      availableDepartments.some((department) => department.id === currentDepartmentId)
+        ? currentDepartmentId
+        : defaultDepartmentId
     );
-    setIsPoc(defaultIsPoc);
-  }, [defaultDepartmentName, defaultIsPoc, hasPoctOnlyScope]);
+  }, [defaultDepartmentId, availableDepartments]);
 
   return (
     <section className="columns is-multiline">
@@ -110,16 +106,24 @@ export function LabsPanel({
                 }
 
                 startTransition(() => {
-                  void onCreateLab({
+                  const createLabInput: CreateLabInput = {
                     hospitalId,
-                    departmentName: departmentName.trim() || defaultDepartmentName,
                     name: sectionName,
-                    isPoc: defaultIsPoc || isPoc,
-                  })
+                    isPoc: selectedDepartment?.is_poc ?? false,
+                  };
+
+                  if (selectedDepartment?.id) {
+                    createLabInput.departmentId = selectedDepartment.id;
+                  }
+
+                  if (selectedDepartment?.name) {
+                    createLabInput.departmentName = selectedDepartment.name;
+                  }
+
+                  void onCreateLab(createLabInput)
                     .then(() => {
-                      setDepartmentName(defaultDepartmentName);
+                      setDepartmentId(defaultDepartmentId);
                       setSectionName("");
-                      setIsPoc(defaultIsPoc);
                       setFormMessage("Section created successfully.");
                     })
                     .catch((error) => {
@@ -155,29 +159,24 @@ export function LabsPanel({
                 <label className="label" htmlFor="local-section-department">
                   Department
                 </label>
-                {defaultIsPoc ? (
-                  <input
-                    id="local-section-department"
-                    className="input"
-                    type="text"
-                    value={POINT_OF_CARE_DEPARTMENT}
-                    readOnly
-                  />
+                {availableDepartments.length === 0 ? (
+                  <p className="mini-note">
+                    No departments exist for this hospital yet. A global admin
+                    needs to create one first.
+                  </p>
                 ) : (
                   <div className="fixed-grid has-1-cols-mobile has-2-cols-tablet">
                     <div className="grid">
-                      {departmentOptions.map((departmentOption) => (
-                        <label className="radio" key={departmentOption}>
+                      {availableDepartments.map((department) => (
+                        <label className="radio" key={department.id}>
                           <input
                             type="radio"
                             name="local-section-department"
-                            value={departmentOption}
-                            checked={departmentName === departmentOption}
-                            onChange={(event) =>
-                              setDepartmentName(event.target.value)
-                            }
+                            value={department.id}
+                            checked={departmentId === department.id}
+                            onChange={() => setDepartmentId(department.id)}
                           />{" "}
-                          {departmentOption}
+                          {department.name}
                         </label>
                       ))}
                     </div>
@@ -199,7 +198,7 @@ export function LabsPanel({
                 />
               </div>
 
-              {defaultIsPoc ? (
+              {selectedDepartment?.is_poc ? (
                 <p className="mini-note">
                   Department is fixed to Point of Care for POCT section setup.
                 </p>
@@ -217,7 +216,7 @@ export function LabsPanel({
                   isPending ? "is-loading" : ""
                 }`}
                 type="submit"
-                disabled={isPending}
+                disabled={isPending || !selectedDepartment}
               >
                 Create section
               </button>
@@ -234,15 +233,85 @@ export function LabsPanel({
               <p className="panel-kicker">Lab sections</p>
               <h2 className="title is-5">Section navigator</h2>
             </div>
-            <button
-              className={`button is-small ${
-                selectedLabId === "all" ? "is-link" : "is-light"
-              }`}
-              onClick={() => onSelectLab("all")}
-              type="button"
-            >
-              All
-            </button>
+            <div className="buttons">
+              {selectedLab && onArchiveLab ? (
+                <button
+                  className="button is-small is-warning is-light"
+                  type="button"
+                  onClick={() => {
+                    if (!currentUser) {
+                      return;
+                    }
+
+                    setFormMessage(null);
+                    const confirmed = confirmManagedAction(
+                      currentUser,
+                      `Archive section "${selectedLab.name}"? This only works after every related template in the section has been archived first.`,
+                      "Please confirm again to archive this section. Archive linked templates one by one first; their linked training records will be archived with them."
+                    );
+
+                    if (!confirmed) {
+                      return;
+                    }
+
+                    startTransition(() => {
+                      void onArchiveLab(selectedLab.id).catch((error) => {
+                        setFormMessage(
+                          error instanceof Error
+                            ? error.message
+                            : "Unable to archive section"
+                        );
+                      });
+                    });
+                  }}
+                >
+                  Archive
+                </button>
+              ) : null}
+              {selectedLab && onDeleteLab ? (
+                <button
+                  className="button is-small is-danger is-light"
+                  type="button"
+                  onClick={() => {
+                    if (!currentUser) {
+                      return;
+                    }
+
+                    setFormMessage(null);
+                    const confirmed = confirmManagedAction(
+                      currentUser,
+                      `Delete section "${selectedLab.name}"? This only works when there are no linked templates, assignments, records, or other related data.`,
+                      "If linked data exists, delete will be blocked. Archive the linked templates first, then archive the section instead. Please confirm again to continue."
+                    );
+
+                    if (!confirmed) {
+                      return;
+                    }
+
+                    startTransition(() => {
+                      void onDeleteLab(selectedLab.id).catch((error) => {
+                        setFormMessage(
+                          error instanceof Error
+                            ? error.message
+                            : "Unable to delete section"
+                        );
+                      });
+                    });
+                  }}
+                >
+                  Delete
+                </button>
+              ) : null}
+              <button
+                className={`button is-small ${
+                  selectedLabId === "all" ? "is-link" : "is-light"
+                }`}
+                onClick={() => onSelectLab("all")}
+                type="button"
+              >
+                All
+              </button>
+            </div>
           </div>
 
           <div className="lab-grid">

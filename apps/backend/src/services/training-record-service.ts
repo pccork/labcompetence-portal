@@ -47,6 +47,7 @@ export interface TrainingRecordSummary {
   submitted_at: Date;
   expires_at: Date;
   status: AssignmentStatus;
+  is_active: boolean;
   created_at: Date;
 }
 
@@ -141,6 +142,7 @@ const trainingRecordSummarySelect = `
     tr.submitted_at,
     tr.expires_at,
     tr.status,
+    tr.is_active,
     tr.created_at
   FROM training_records tr
   INNER JOIN users u ON u.id = tr.user_id
