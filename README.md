@@ -15,6 +15,7 @@ A digital platform for managing laboratory training, competency assessment, rene
 - User roles, dashboard areas, and workflow guide: [apps/backend/APP_USER_GUIDE.md](apps/backend/APP_USER_GUIDE.md)
 - Relational schema and workflow data model: [apps/backend/DATABASE_SCHEMA_README.md](apps/backend/DATABASE_SCHEMA_README.md)
 - Multi-hospital and POCT scope notes: [apps/backend/HOSPITAL_SCHEMA_README.md](apps/backend/HOSPITAL_SCHEMA_README.md)
+- Delete/archive behaviour for departments, sections, templates, and records: [DELETE_ARCHIVE_RULES_README.md](DELETE_ARCHIVE_RULES_README.md)
 - Project proposal and product design overview: [PROJECT_PROPOSAL.md](PROJECT_PROPOSAL.md)
 
 ## Render Deployment Shape
