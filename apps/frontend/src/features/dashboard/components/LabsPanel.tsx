@@ -1,4 +1,4 @@
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { CurrentUser } from "../../auth/api";
 import {
@@ -7,6 +7,16 @@ import {
   LabSummary,
 } from "../api";
 import { confirmManagedAction } from "./managementConfirm";
+
+const DEFAULT_CORE_DEPARTMENTS = [
+  "Biochemistry",
+  "Microbiology",
+  "Virology",
+  "Haematology",
+  "Histology",
+] as const;
+
+const POINT_OF_CARE_DEPARTMENT = "Point of Care";
 
 interface LabsPanelProps {
   currentUser?: CurrentUser;
@@ -29,10 +39,16 @@ export function LabsPanel({
   showCreateSection = true,
   showLabSections = true,
 }: LabsPanelProps) {
+  const hasPoctOnlyScope = labs.length > 0 && labs.every((lab) => lab.is_poc);
+  const departmentOptions = hasPoctOnlyScope
+    ? [POINT_OF_CARE_DEPARTMENT]
+    : [...DEFAULT_CORE_DEPARTMENTS];
+  const defaultDepartmentName = departmentOptions[0] ?? "";
+  const defaultIsPoc = defaultDepartmentName === POINT_OF_CARE_DEPARTMENT;
   const [hospitalId, setHospitalId] = useState(() => hospitals[0]?.id || 1);
-  const [departmentName, setDepartmentName] = useState("");
+  const [departmentName, setDepartmentName] = useState(defaultDepartmentName);
   const [sectionName, setSectionName] = useState("");
-  const [isPoc, setIsPoc] = useState(false);
+  const [isPoc, setIsPoc] = useState(defaultIsPoc);
   const [formMessage, setFormMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const canManageSectionsByStaffType =
@@ -44,6 +60,21 @@ export function LabsPanel({
     ((currentUser.role === "admin" && !currentUser.is_global_admin) ||
       canManageSectionsByStaffType) &&
     !!onCreateLab;
+
+  useEffect(() => {
+    const allowedDepartmentOptions = hasPoctOnlyScope
+      ? [POINT_OF_CARE_DEPARTMENT]
+      : [...DEFAULT_CORE_DEPARTMENTS];
+
+    setDepartmentName((currentDepartmentName: string) =>
+      allowedDepartmentOptions.includes(
+        currentDepartmentName as (typeof allowedDepartmentOptions)[number]
+      )
+        ? currentDepartmentName
+        : defaultDepartmentName
+    );
+    setIsPoc(defaultIsPoc);
+  }, [defaultDepartmentName, defaultIsPoc, hasPoctOnlyScope]);
 
   return (
     <section className="columns is-multiline">
@@ -81,14 +112,14 @@ export function LabsPanel({
                 startTransition(() => {
                   void onCreateLab({
                     hospitalId,
-                    departmentName,
+                    departmentName: departmentName.trim() || defaultDepartmentName,
                     name: sectionName,
-                    isPoc,
+                    isPoc: defaultIsPoc || isPoc,
                   })
                     .then(() => {
-                      setDepartmentName("");
+                      setDepartmentName(defaultDepartmentName);
                       setSectionName("");
-                      setIsPoc(false);
+                      setIsPoc(defaultIsPoc);
                       setFormMessage("Section created successfully.");
                     })
                     .catch((error) => {
@@ -124,14 +155,34 @@ export function LabsPanel({
                 <label className="label" htmlFor="local-section-department">
                   Department
                 </label>
-                <input
-                  id="local-section-department"
-                  className="input"
-                  type="text"
-                  value={departmentName}
-                  onChange={(event) => setDepartmentName(event.target.value)}
-                  placeholder="e.g. Clinical Biochemistry"
-                />
+                {defaultIsPoc ? (
+                  <input
+                    id="local-section-department"
+                    className="input"
+                    type="text"
+                    value={POINT_OF_CARE_DEPARTMENT}
+                    readOnly
+                  />
+                ) : (
+                  <div className="fixed-grid has-1-cols-mobile has-2-cols-tablet">
+                    <div className="grid">
+                      {departmentOptions.map((departmentOption) => (
+                        <label className="radio" key={departmentOption}>
+                          <input
+                            type="radio"
+                            name="local-section-department"
+                            value={departmentOption}
+                            checked={departmentName === departmentOption}
+                            onChange={(event) =>
+                              setDepartmentName(event.target.value)
+                            }
+                          />{" "}
+                          {departmentOption}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="field">
@@ -148,14 +199,16 @@ export function LabsPanel({
                 />
               </div>
 
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={isPoc}
-                  onChange={(event) => setIsPoc(event.target.checked)}
-                />{" "}
-                Point of care section
-              </label>
+              {defaultIsPoc ? (
+                <p className="mini-note">
+                  Department is fixed to Point of Care for POCT section setup.
+                </p>
+              ) : (
+                <p className="mini-note">
+                  Local setup can create sections only under the approved
+                  hospital departments.
+                </p>
+              )}
 
               {formMessage ? <p className="mini-note">{formMessage}</p> : null}
 

@@ -45,6 +45,8 @@ export async function assignUserToLab(
     `
     INSERT INTO user_training_units (user_id, training_unit_id)
     VALUES ($1, $2)
+    ON CONFLICT (user_id, training_unit_id) DO UPDATE
+    SET assigned_at = user_training_units.assigned_at
     RETURNING
       user_id,
       training_unit_id AS lab_id,

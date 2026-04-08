@@ -1,5 +1,7 @@
 import { FastifyPluginAsync } from "fastify";
 import {
+  DEFAULT_CORE_DEPARTMENTS,
+  POINT_OF_CARE_DEPARTMENT,
   Role,
   StaffType,
 } from "shared-types";
@@ -14,11 +16,13 @@ import { findHospitalById } from "../services/hospital-service";
 import {
   createLab,
   deleteLab,
+  findDepartmentById,
   findLabById,
   listLabs,
   updateLab,
 } from "../services/lab-service";
 import { maybeAutoSyncPrivateSeed } from "../services/private-seed-sync-service";
+import { assignUserToLab } from "../services/user-lab-service";
 import { findUserById } from "../services/user-service";
 
 interface CreateLabBody {
@@ -43,12 +47,25 @@ function canCreateLabsForOwnScope(input: {
   isGlobalAdmin: boolean;
 }) {
   if (input.role === Role.ADMIN) {
-    return !input.isGlobalAdmin;
+    return true;
   }
 
   return (
     input.staffType === StaffType.TRAINING_COORDINATOR ||
     input.staffType === StaffType.SENIOR_MEDICAL_SCIENTIST
+  );
+}
+
+function isAllowedLocalDepartmentName(
+  departmentName: string,
+  isPoc: boolean,
+) {
+  if (isPoc) {
+    return departmentName === POINT_OF_CARE_DEPARTMENT;
+  }
+
+  return DEFAULT_CORE_DEPARTMENTS.includes(
+    departmentName as (typeof DEFAULT_CORE_DEPARTMENTS)[number],
   );
 }
 
@@ -153,6 +170,43 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
+      if (!currentUser.is_global_admin) {
+        const selectedDepartment =
+          departmentId !== null
+            ? await findDepartmentById(fastify.db, departmentId)
+            : null;
+        const effectiveDepartmentName =
+          selectedDepartment?.name ?? departmentName ?? null;
+        const effectiveIsPoc = selectedDepartment?.is_poc ?? isPoc;
+
+        if (
+          selectedDepartment &&
+          selectedDepartment.hospital_id !== hospitalId
+        ) {
+          return reply.status(403).send({
+            message: "Department does not belong to the selected hospital",
+          });
+        }
+
+        if (!effectiveDepartmentName) {
+          return reply.status(400).send({
+            message: "Department selection is required",
+          });
+        }
+
+        if (
+          !isAllowedLocalDepartmentName(
+            effectiveDepartmentName,
+            effectiveIsPoc,
+          )
+        ) {
+          return reply.status(403).send({
+            message:
+              "Local setup can only create sections in approved departments",
+          });
+        }
+      }
+
       try {
         const lab = await createLab(
           fastify.db,
@@ -161,6 +215,18 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
           isPoc,
           departmentId,
           departmentName,
+        );
+
+        if (!lab) {
+          return reply.status(500).send({
+            message: "Unable to create training unit",
+          });
+        }
+
+        await assignUserToLab(
+          fastify.db,
+          Number(request.user.id),
+          lab.id,
         );
 
         await maybeAutoSyncPrivateSeed(fastify.db);

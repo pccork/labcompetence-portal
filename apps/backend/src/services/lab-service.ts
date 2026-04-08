@@ -90,6 +90,33 @@ export async function listDepartments(db: Pool, hospitalId?: number) {
   return result.rows;
 }
 
+export async function findDepartmentById(db: Pool, id: number) {
+  const result = await db.query<{
+    id: number;
+    hospital_id: number;
+    hospital_name: string;
+    name: string;
+    is_poc: boolean;
+    created_at: Date;
+  }>(
+    `
+    SELECT
+      l.id,
+      l.hospital_id,
+      h.name AS hospital_name,
+      l.name,
+      l.is_poc,
+      l.created_at
+    FROM labs l
+    INNER JOIN hospitals h ON h.id = l.hospital_id
+    WHERE l.id = $1
+    `,
+    [id]
+  );
+
+  return result.rows[0];
+}
+
 export async function createLab(
   db: Pool,
   hospitalId: number,
