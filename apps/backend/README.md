@@ -2,6 +2,22 @@
 
 This backend uses PostgreSQL and reads its connection settings from `.env`.
 
+## Backend Layering
+
+The API is organized around a layered Fastify structure:
+
+- `src/routes`: endpoint registration only; these modules delegate to controllers.
+- `src/controllers`: HTTP request and response handling, including parameter extraction and status codes.
+- `src/services`: business rules, workflow orchestration, hashing, and cross-repository decisions.
+- `src/repositories`: PostgreSQL queries and persistence details.
+- `src/schemas`: request/response contracts and validation helpers.
+- `src/plugins`: infrastructure setup such as database, auth, and email.
+- `src/config`: environment and runtime configuration.
+
+The `users` domain is the reference implementation for the full
+controller/service/repository/schema split. Existing domains can be migrated
+incrementally into the same pattern without changing their public route URLs.
+
 ## Recommended Local Workflow
 
 Use the system PostgreSQL service for now. Once it is installed and enabled, you usually only need to start the API.
