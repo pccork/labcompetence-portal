@@ -1,20 +1,8 @@
 # Backend Layered Architecture Refactor
 
-## Suggested Commit Message
 
-```text
-refactor backend into layered Fastify architecture
 
-- Add controller layer and move existing route handler logic out of routes
-- Keep route files thin so they only register/delegate endpoints
-- Add repository layer and move user SQL persistence into user-repository
-- Keep user business logic in user-service, including password hashing and access-scoped workflows
-- Add user schema contracts for request params/body typing and allowed role/staff-type validation
-- Document backend layering responsibilities in the backend README
-- Remove deprecated backend tsconfig baseUrl option
-```
-
-## Suggested Push / PR Description
+## Description
 
 This refactor moves the backend toward a cleaner layered Fastify architecture.
 Route files now act as thin registration modules, while controllers own HTTP
