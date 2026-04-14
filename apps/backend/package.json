@@ -8,6 +8,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "seed": "ts-node src/scripts/seed.ts",
+    "reset:templates": "ts-node src/scripts/reset-templates-from-samples.ts",
+    "cleanup:legacy-trainer-queue": "ts-node src/scripts/cleanup-legacy-trainer-queue.ts",
     "bootstrap:local-poct": "ts-node src/scripts/bootstrap-local-poct.ts",
     "cleanup:mass-spec-demo": "ts-node src/scripts/cleanup-mass-spectrometry-demo.ts",
     "reset:demo-passwords": "ts-node src/scripts/reset-demo-passwords.ts",

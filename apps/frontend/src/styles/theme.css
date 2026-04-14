@@ -338,6 +338,17 @@ body {
   max-height: 900px;
 }
 
+.template-library-group {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.template-library-group + .template-library-group {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
 .template-schema-editor {
   width: 100%;
   min-height: 260px;
@@ -546,6 +557,11 @@ body {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.template-library-filter-toggle {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 1rem;
+}
+
 .mode-toggle-button {
   border: 1px solid var(--portal-border);
   border-radius: 22px;
@@ -566,6 +582,13 @@ body {
   color: var(--portal-slate);
   font-size: 0.78rem;
   line-height: 1.35;
+}
+
+.mode-toggle-button strong {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 
 .mode-toggle-button.is-active {
@@ -752,8 +775,16 @@ body {
 
 .poc-register-hero {
   background:
-    radial-gradient(circle at top left, rgba(15, 118, 110, 0.22), transparent 30%),
-    radial-gradient(circle at bottom right, rgba(245, 158, 11, 0.18), transparent 28%),
+    radial-gradient(
+      circle at top left,
+      rgba(15, 118, 110, 0.22),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at bottom right,
+      rgba(245, 158, 11, 0.18),
+      transparent 28%
+    ),
     linear-gradient(135deg, #f8fbfc, #eef8f5 62%, #fff8eb);
 }
 

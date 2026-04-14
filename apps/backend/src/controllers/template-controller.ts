@@ -67,7 +67,7 @@ function sanitizeTemplateBody(body: TemplateBody["Body"]) {
   const labId = Number(body.labId);
   const formFamilyReference =
     body.formFamilyReference?.trim() || "FOR-CUH-PAT-2";
-  const templateKind = body.templateKind?.trim() || "training_event_competency";
+  const templateKind = body.templateKind?.trim() || "training_event";
   const targetStaffType =
     body.targetStaffType?.trim().toLowerCase() ||
     StaffType.BASIC_GRADE_SCIENTIST;
@@ -179,7 +179,10 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.db,
         Number(request.user.id),
       );
-      const currentUser = await findUserById(fastify.db, Number(request.user.id));
+      const currentUser = await findUserById(
+        fastify.db,
+        Number(request.user.id),
+      );
 
       if (!scope || !currentUser) {
         return reply.status(404).send({ message: "User not found" });
@@ -475,7 +478,10 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.db,
         Number(request.user.id),
       );
-      const currentUser = await findUserById(fastify.db, Number(request.user.id));
+      const currentUser = await findUserById(
+        fastify.db,
+        Number(request.user.id),
+      );
 
       if (!scope || !currentUser) {
         return reply.status(404).send({ message: "User not found" });
@@ -515,7 +521,10 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
 
       const usage = await getTemplateUsage(fastify.db, templateId);
 
-      if ((usage?.assignment_count ?? 0) > 0 || (usage?.record_count ?? 0) > 0) {
+      if (
+        (usage?.assignment_count ?? 0) > 0 ||
+        (usage?.record_count ?? 0) > 0
+      ) {
         return reply.status(409).send({
           message:
             "This template cannot be deleted because assignments or training records already exist. Archive it instead so record history is preserved.",
@@ -553,7 +562,10 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.db,
         Number(request.user.id),
       );
-      const currentUser = await findUserById(fastify.db, Number(request.user.id));
+      const currentUser = await findUserById(
+        fastify.db,
+        Number(request.user.id),
+      );
 
       if (!scope || !currentUser) {
         return reply.status(404).send({ message: "User not found" });

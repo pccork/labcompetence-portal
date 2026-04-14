@@ -5,7 +5,7 @@ ALTER TABLE templates
 ADD COLUMN IF NOT EXISTS form_family_reference TEXT NOT NULL DEFAULT 'FOR-CUH-PAT-2';
 
 ALTER TABLE templates
-ADD COLUMN IF NOT EXISTS template_kind TEXT NOT NULL DEFAULT 'training_event_competency';
+ADD COLUMN IF NOT EXISTS template_kind TEXT NOT NULL DEFAULT 'training_event';
 
 ALTER TABLE templates
 ADD COLUMN IF NOT EXISTS target_staff_type TEXT NOT NULL DEFAULT 'basic_grade_scientist';

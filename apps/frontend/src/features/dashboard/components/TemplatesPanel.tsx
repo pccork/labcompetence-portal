@@ -26,7 +26,7 @@ interface TemplatesPanelProps {
   onDeleteTemplate: (templateId: number) => Promise<void>;
   onRestoreTemplate: (templateId: number) => Promise<void>;
   onFetchTemplateDetail: (
-    templateId: number
+    templateId: number,
   ) => Promise<{ template: TemplateDetail }>;
   showTemplateSetup?: boolean;
   showFormLibrary?: boolean;
@@ -43,12 +43,35 @@ const staffTypeOptions = [
 
 const templateKindOptions = [
   {
-    value: "training_event_competency",
-    label: "Training Event + Competency",
+    value: "training_event",
+    label: "Training Event",
   },
-  { value: "competency_only", label: "Competency Only" },
-  { value: "senior_staff_programme", label: "Senior Staff Programme" },
-  { value: "poc_checklist", label: "POC Checklist" },
+  { value: "competency_assessment", label: "Competency Assessment" },
+];
+
+const splitTemplateKinds = new Set(["training_event", "competency_assessment"]);
+
+const templateKindLabels = new Map([
+  ["training_event", "Training Event"],
+  ["competency_assessment", "Competency Assessment"],
+]);
+
+const templateLibraryFilterOptions = [
+  {
+    value: "all",
+    label: "All",
+    description: "Training events and competency assessments",
+  },
+  {
+    value: "training_event",
+    label: "Training Events",
+    description: "Initial staff training records",
+  },
+  {
+    value: "competency_assessment",
+    label: "Competency Assessments",
+    description: "Annual follow-up records",
+  },
 ];
 
 const defaultSignatureFields = [
@@ -90,35 +113,31 @@ export function TemplatesPanel({
 }: TemplatesPanelProps) {
   const [isExpandedEditorOpen, setIsExpandedEditorOpen] = useState(false);
   const [labId, setLabId] = useState(() => labs[0]?.id || 1);
-  const [name, setName] = useState("FOR-CUH-PAT-2 New Section");
+  const [name, setName] = useState("FOR-CUH-PAT-2 New Training Event");
   const [formFamilyReference, setFormFamilyReference] =
     useState("FOR-CUH-PAT-2");
-  const [formTitle, setFormTitle] = useState(
-    "Training Event and Competency Assessment Form"
-  );
-  const [templateKind, setTemplateKind] = useState(
-    "training_event_competency"
-  );
+  const [formTitle, setFormTitle] = useState("Training Event Form");
+  const [templateKind, setTemplateKind] = useState("training_event");
   const [targetStaffType, setTargetStaffType] = useState(
-    "basic_grade_scientist"
+    "basic_grade_scientist",
   );
   const [isActive, setIsActive] = useState(true);
   const [eventCode, setEventCode] = useState("TE/NEW-SECTION");
   const [eventDescription, setEventDescription] = useState(
-    "Describe the section training and related SOPs here. If a response does not apply, enter N/A instead of leaving it blank."
+    "Describe the section training and related SOPs here. If a response does not apply, enter N/A instead of leaving it blank.",
   );
   const [eventObjectivesText, setEventObjectivesText] = useState(
-    getDefaultObjectives()
+    getDefaultObjectives(),
   );
   const [referenceDocumentsText, setReferenceDocumentsText] = useState(
-    getDefaultReferences()
+    getDefaultReferences(),
   );
   const [assessmentCode, setAssessmentCode] = useState("CA/NEW-SECTION");
   const [assessmentDescription, setAssessmentDescription] = useState(
-    "Describe how the trainer will assess competence in this section. If a response does not apply, enter N/A instead of leaving it blank."
+    "Describe how the trainer will assess competence in this section. If a response does not apply, enter N/A instead of leaving it blank.",
   );
   const [assessmentObjectivesText, setAssessmentObjectivesText] = useState(
-    "The trainer will deem the participant competent to perform the key tasks listed below."
+    "The trainer will deem the participant competent to perform the key tasks listed below.",
   );
   const [competencyTasks, setCompetencyTasks] = useState([
     {
@@ -127,6 +146,7 @@ export function TemplatesPanel({
   ]);
   const [showGeneratedSchema, setShowGeneratedSchema] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [templateLibraryFilter, setTemplateLibraryFilter] = useState("all");
   const [formMessage, setFormMessage] = useState<string | null>(null);
   const [printMessage, setPrintMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -143,10 +163,23 @@ export function TemplatesPanel({
     }
   }, [labId, labs]);
 
+  const splitTemplates = useMemo(
+    () =>
+      templates.filter((template) =>
+        splitTemplateKinds.has(template.template_kind),
+      ),
+    [templates],
+  );
+
   const filteredTemplates = useMemo(() => {
     const normalizedSearchTerm = searchTerm.trim().toLowerCase();
 
-    return [...templates]
+    return [...splitTemplates]
+      .filter(
+        (template) =>
+          templateLibraryFilter === "all" ||
+          template.template_kind === templateLibraryFilter,
+      )
       .filter((template) => {
         if (!normalizedSearchTerm) {
           return true;
@@ -157,11 +190,42 @@ export function TemplatesPanel({
           .includes(normalizedSearchTerm);
       })
       .sort((left, right) => left.name.localeCompare(right.name));
-  }, [searchTerm, templates]);
+  }, [searchTerm, splitTemplates, templateLibraryFilter]);
+
+  const trainingEventTemplates = useMemo(
+    () =>
+      filteredTemplates.filter(
+        (template) => template.template_kind === "training_event",
+      ),
+    [filteredTemplates],
+  );
+
+  const competencyAssessmentTemplates = useMemo(
+    () =>
+      filteredTemplates.filter(
+        (template) => template.template_kind === "competency_assessment",
+      ),
+    [filteredTemplates],
+  );
+
+  const hiddenLegacyTemplateCount = templates.length - splitTemplates.length;
+
+  const libraryFilterCounts = useMemo(
+    () => ({
+      all: splitTemplates.length,
+      training_event: splitTemplates.filter(
+        (template) => template.template_kind === "training_event",
+      ).length,
+      competency_assessment: splitTemplates.filter(
+        (template) => template.template_kind === "competency_assessment",
+      ).length,
+    }),
+    [splitTemplates],
+  );
 
   const selectedLab = useMemo(
     () => labs.find((lab) => lab.id === labId) ?? null,
-    [labId, labs]
+    [labId, labs],
   );
 
   const generatedSchema = useMemo(() => {
@@ -186,7 +250,7 @@ export function TemplatesPanel({
       sectionName: selectedLab?.name || "Selected training unit",
       documentTitle: name,
       sections: [
-        ...(templateKind === "competency_only"
+        ...(templateKind === "competency_assessment"
           ? []
           : [
               {
@@ -206,7 +270,7 @@ export function TemplatesPanel({
                 description: assessmentDescription,
                 objectives: assessmentObjectives,
                 tasks: competencyTasks.filter(
-                  (task) => task.taskLabel.trim() || task.method.trim()
+                  (task) => task.taskLabel.trim() || task.method.trim(),
                 ),
                 referenceDocuments,
               },
@@ -235,7 +299,7 @@ export function TemplatesPanel({
 
   const generatedSchemaText = useMemo(
     () => JSON.stringify(generatedSchema, null, 2),
-    [generatedSchema]
+    [generatedSchema],
   );
 
   const handleCreateTemplate = (event: FormEvent<HTMLFormElement>) => {
@@ -249,7 +313,7 @@ export function TemplatesPanel({
           ? `${selectedLab.department_name} / ${selectedLab.name}`
           : "the selected training unit"
       }?`,
-      "Please confirm again to create this template."
+      "Please confirm again to create this template.",
     );
 
     if (!confirmed) {
@@ -268,20 +332,21 @@ export function TemplatesPanel({
       })
         .then(() => {
           setFormMessage("Template created successfully.");
-          setName("FOR-CUH-PAT-2 New Section");
-          setFormTitle("Training Event and Competency Assessment Form");
+          setName("FOR-CUH-PAT-2 New Training Event");
+          setFormTitle("Training Event Form");
+          setTemplateKind("training_event");
           setEventCode("TE/NEW-SECTION");
           setEventDescription(
-            "Describe the section training and related SOPs here. If a response does not apply, enter N/A instead of leaving it blank."
+            "Describe the section training and related SOPs here. If a response does not apply, enter N/A instead of leaving it blank.",
           );
           setEventObjectivesText(getDefaultObjectives());
           setReferenceDocumentsText(getDefaultReferences());
           setAssessmentCode("CA/NEW-SECTION");
           setAssessmentDescription(
-            "Describe how the trainer will assess competence in this section. If a response does not apply, enter N/A instead of leaving it blank."
+            "Describe how the trainer will assess competence in this section. If a response does not apply, enter N/A instead of leaving it blank.",
           );
           setAssessmentObjectivesText(
-            "The trainer will deem the participant competent to perform the key tasks listed below."
+            "The trainer will deem the participant competent to perform the key tasks listed below.",
           );
           setCompetencyTasks([{ ...defaultCompetencyTask }]);
           setShowGeneratedSchema(false);
@@ -291,10 +356,23 @@ export function TemplatesPanel({
           setFormMessage(
             error instanceof Error
               ? error.message
-              : "Unable to create template"
+              : "Unable to create template",
           );
         });
     });
+  };
+
+  const handleTemplateKindChange = (nextTemplateKind: string) => {
+    setTemplateKind(nextTemplateKind);
+
+    if (nextTemplateKind === "competency_assessment") {
+      setName("FOR-CUH-PAT-2 New Competency Assessment");
+      setFormTitle("Competency Assessment Form");
+      return;
+    }
+
+    setName("FOR-CUH-PAT-2 New Training Event");
+    setFormTitle("Training Event Form");
   };
 
   const renderTemplateSetupForm = (expanded = false) => (
@@ -303,7 +381,10 @@ export function TemplatesPanel({
       onSubmit={handleCreateTemplate}
     >
       <div className="field">
-        <label className="label" htmlFor={expanded ? "template-lab-expanded" : "template-lab"}>
+        <label
+          className="label"
+          htmlFor={expanded ? "template-lab-expanded" : "template-lab"}
+        >
           Lab section
         </label>
         <div className="select is-fullwidth">
@@ -340,7 +421,9 @@ export function TemplatesPanel({
       <div className="field">
         <label
           className="label"
-          htmlFor={expanded ? "template-form-title-expanded" : "template-form-title"}
+          htmlFor={
+            expanded ? "template-form-title-expanded" : "template-form-title"
+          }
         >
           Printed form title
         </label>
@@ -381,7 +464,7 @@ export function TemplatesPanel({
             <select
               id={expanded ? "template-kind-expanded" : "template-kind"}
               value={templateKind}
-              onChange={(event) => setTemplateKind(event.target.value)}
+              onChange={(event) => handleTemplateKindChange(event.target.value)}
             >
               {templateKindOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -406,7 +489,9 @@ export function TemplatesPanel({
           <div className="select is-fullwidth">
             <select
               id={
-                expanded ? "template-staff-type-expanded" : "template-staff-type"
+                expanded
+                  ? "template-staff-type-expanded"
+                  : "template-staff-type"
               }
               value={targetStaffType}
               onChange={(event) => setTargetStaffType(event.target.value)}
@@ -443,7 +528,9 @@ export function TemplatesPanel({
         <label
           className="label"
           htmlFor={
-            expanded ? "template-event-description-expanded" : "template-event-description"
+            expanded
+              ? "template-event-description-expanded"
+              : "template-event-description"
           }
         >
           Training event description
@@ -452,17 +539,25 @@ export function TemplatesPanel({
           <div className="field">
             <label
               className="label"
-              htmlFor={expanded ? "template-event-code-expanded" : "template-event-code"}
+              htmlFor={
+                expanded
+                  ? "template-event-code-expanded"
+                  : "template-event-code"
+              }
             >
               Training event code
             </label>
             <input
-              id={expanded ? "template-event-code-expanded" : "template-event-code"}
+              id={
+                expanded
+                  ? "template-event-code-expanded"
+                  : "template-event-code"
+              }
               className="input"
               type="text"
               value={eventCode}
               onChange={(event) => setEventCode(event.target.value)}
-              disabled={templateKind === "competency_only"}
+              disabled={templateKind === "competency_assessment"}
             />
           </div>
 
@@ -492,7 +587,7 @@ export function TemplatesPanel({
           </div>
         </div>
 
-        {templateKind !== "competency_only" ? (
+        {templateKind !== "competency_assessment" ? (
           <>
             <textarea
               id={
@@ -505,7 +600,8 @@ export function TemplatesPanel({
               onChange={(event) => setEventDescription(event.target.value)}
             />
             <p className="mini-note">
-              Include wording such as: If not applicable, enter <code>N/A</code>.
+              Include wording such as: If not applicable, enter <code>N/A</code>
+              .
             </p>
 
             <div className="field mt-4">
@@ -558,10 +654,13 @@ export function TemplatesPanel({
                 }
                 className="textarea"
                 value={assessmentDescription}
-                onChange={(event) => setAssessmentDescription(event.target.value)}
+                onChange={(event) =>
+                  setAssessmentDescription(event.target.value)
+                }
               />
               <p className="mini-note">
-                Include wording such as: If not applicable, enter <code>N/A</code>.
+                Include wording such as: If not applicable, enter{" "}
+                <code>N/A</code>.
               </p>
             </div>
 
@@ -589,16 +688,17 @@ export function TemplatesPanel({
                 }
                 spellCheck="false"
               />
-              <p className="mini-note">
-                One objective per line.
-              </p>
+              <p className="mini-note">One objective per line.</p>
             </div>
 
             <div className="field mt-4">
               <label className="label">Competency tasks / methods</label>
               <div className="template-task-list">
                 {competencyTasks.map((task, index) => (
-                  <div className="template-task-row" key={`${index}-${task.method}`}>
+                  <div
+                    className="template-task-row"
+                    key={`${index}-${task.method}`}
+                  >
                     <input
                       className="input"
                       type="text"
@@ -611,8 +711,8 @@ export function TemplatesPanel({
                                   ...item,
                                   taskLabel: event.target.value,
                                 }
-                              : item
-                          )
+                              : item,
+                          ),
                         );
                       }}
                       placeholder="Task label"
@@ -629,8 +729,8 @@ export function TemplatesPanel({
                                   ...item,
                                   method: event.target.value,
                                 }
-                              : item
-                          )
+                              : item,
+                          ),
                         );
                       }}
                       placeholder="Method"
@@ -642,7 +742,9 @@ export function TemplatesPanel({
                         setCompetencyTasks((current) =>
                           current.length === 1
                             ? [{ ...defaultCompetencyTask }]
-                            : current.filter((_, itemIndex) => itemIndex !== index)
+                            : current.filter(
+                                (_, itemIndex) => itemIndex !== index,
+                              ),
                         );
                       }}
                     >
@@ -677,7 +779,9 @@ export function TemplatesPanel({
             Related documentation / reference material
           </label>
           <textarea
-            id={expanded ? "template-references-expanded" : "template-references"}
+            id={
+              expanded ? "template-references-expanded" : "template-references"
+            }
             className="textarea template-multiline-editor"
             value={referenceDocumentsText}
             onChange={(event) => setReferenceDocumentsText(event.target.value)}
@@ -758,10 +862,234 @@ export function TemplatesPanel({
     </form>
   );
 
+  const renderTemplateCard = (template: TemplateSummary) => (
+    <article className="list-card" key={template.id}>
+      <div>
+        <h3 className="list-title">{template.name}</h3>
+        <p className="list-meta">
+          {template.form_family_reference} · {template.department_name} /{" "}
+          {template.lab_name} · {template.lab_hospital_name}
+        </p>
+        <p className="mini-note">
+          {templateKindLabels.get(template.template_kind) ??
+            template.template_kind.replaceAll("_", " ")}{" "}
+          · {template.target_staff_type.replaceAll("_", " ")}
+        </p>
+      </div>
+
+      <div className="tag-stack">
+        {!isReadOnly ? (
+          <button
+            className="button is-danger is-small"
+            type="button"
+            onClick={() => {
+              setPrintMessage(null);
+
+              const confirmed = confirmManagedAction(
+                currentUser,
+                `Delete template "${template.name}"? This only works when there are no linked assignments or training records.`,
+                "If linked data exists, delete will be blocked and you should archive the template instead. Please confirm again to continue.",
+              );
+
+              if (!confirmed) {
+                return;
+              }
+
+              startTransition(() => {
+                void onDeleteTemplate(template.id).catch((error) => {
+                  setPrintMessage(
+                    error instanceof Error
+                      ? error.message
+                      : "Unable to delete template",
+                  );
+                });
+              });
+            }}
+          >
+            Delete
+          </button>
+        ) : null}
+        {!template.is_active && !isReadOnly ? (
+          <button
+            className="button is-link is-light is-small"
+            type="button"
+            onClick={() => {
+              setPrintMessage(null);
+
+              const confirmed = confirmManagedAction(
+                currentUser,
+                `Restore template "${template.name}"? Linked archived training records for this template will be restored with it.`,
+                "Please confirm again to restore this template and its linked training records.",
+              );
+
+              if (!confirmed) {
+                return;
+              }
+
+              startTransition(() => {
+                void onRestoreTemplate(template.id).catch((error) => {
+                  setPrintMessage(
+                    error instanceof Error
+                      ? error.message
+                      : "Unable to restore template",
+                  );
+                });
+              });
+            }}
+          >
+            Restore
+          </button>
+        ) : null}
+        {template.is_active && !isReadOnly ? (
+          <button
+            className="button is-danger is-light is-small"
+            type="button"
+            onClick={() => {
+              setPrintMessage(null);
+
+              const confirmed = confirmManagedAction(
+                currentUser,
+                `Archive template "${template.name}"? Linked training records for this template will be archived with it, and the template will stop appearing for new training.`,
+                "Please confirm again to archive this template and its linked training records.",
+              );
+
+              if (!confirmed) {
+                return;
+              }
+
+              startTransition(() => {
+                void onArchiveTemplate(template).catch((error) => {
+                  setPrintMessage(
+                    error instanceof Error
+                      ? error.message
+                      : "Unable to archive template",
+                  );
+                });
+              });
+            }}
+          >
+            Archive
+          </button>
+        ) : null}
+        <button
+          className="button is-light is-small"
+          type="button"
+          onClick={() => {
+            setPrintMessage(null);
+
+            startTransition(() => {
+              void onFetchTemplateDetail(template.id)
+                .then((response) => {
+                  const templateDetail = response.template;
+                  const latestVersion = templateDetail.versions[0] || null;
+
+                  downloadTemplateDocument({
+                    filename: `${
+                      templateDetail.name
+                        .toLowerCase()
+                        .replaceAll(/[^a-z0-9]+/g, "-")
+                        .replaceAll(/^-|-$/g, "") || "template"
+                    }-v${
+                      latestVersion?.version_number ||
+                      templateDetail.latest_version_number ||
+                      1
+                    }.docx`,
+                    generatedBy: "Lab competence portal",
+                    title: templateDetail.name,
+                    subtitle: `${templateDetail.form_family_reference} · ${templateDetail.department_name} / ${templateDetail.lab_name} · ${templateDetail.lab_hospital_name}`,
+                    details: [
+                      {
+                        label: "Template type",
+                        value:
+                          templateKindLabels.get(
+                            templateDetail.template_kind,
+                          ) ??
+                          templateDetail.template_kind.replaceAll("_", " "),
+                      },
+                      {
+                        label: "Target staff type",
+                        value: templateDetail.target_staff_type.replaceAll(
+                          "_",
+                          " ",
+                        ),
+                      },
+                      {
+                        label: "Latest version",
+                        value:
+                          latestVersion?.version_number ||
+                          templateDetail.latest_version_number ||
+                          1,
+                      },
+                      {
+                        label: "Status",
+                        value: templateDetail.is_active ? "Active" : "Inactive",
+                      },
+                      {
+                        label: "Department",
+                        value: templateDetail.department_name,
+                      },
+                      {
+                        label: "Training unit",
+                        value: templateDetail.lab_name,
+                      },
+                    ],
+                    schemaJson: latestVersion?.schema_json,
+                  });
+                })
+                .catch((error) => {
+                  setPrintMessage(
+                    error instanceof Error
+                      ? error.message
+                      : "Unable to print template",
+                  );
+                });
+            });
+          }}
+        >
+          Download DOCX
+        </button>
+        <span className="tag is-link is-light">
+          v{template.latest_version_number || 1}
+        </span>
+        {template.is_active ? (
+          <span className="tag is-success is-light">active</span>
+        ) : (
+          <span className="tag is-light">inactive</span>
+        )}
+      </div>
+    </article>
+  );
+
+  const renderTemplateGroup = (
+    title: string,
+    description: string,
+    groupedTemplates: TemplateSummary[],
+  ) => (
+    <div className="template-library-group">
+      <div className="panel-heading-row">
+        <div>
+          <h3 className="title is-6">{title}</h3>
+          <p className="mini-note">{description}</p>
+        </div>
+        <span className="tag is-light">{groupedTemplates.length}</span>
+      </div>
+
+      {groupedTemplates.length === 0 ? (
+        <p className="empty-state">No matching templates in this group.</p>
+      ) : (
+        groupedTemplates.map(renderTemplateCard)
+      )}
+    </div>
+  );
+
   return (
     <>
       {isExpandedEditorOpen && !isReadOnly && showTemplateSetup ? (
-        <div className="template-editor-overlay" role="dialog" aria-modal="true">
+        <div
+          className="template-editor-overlay"
+          role="dialog"
+          aria-modal="true"
+        >
           <div className="template-editor-modal panel-card">
             <div className="panel-heading-row">
               <div>
@@ -781,287 +1109,141 @@ export function TemplatesPanel({
         </div>
       ) : null}
       <section className="columns is-multiline">
-      {!isReadOnly && showTemplateSetup ? (
-        <div
-          className={
-            showFormLibrary ? "column is-5-desktop" : "column is-12"
-          }
-        >
-          <section className="panel-card">
-            <div className="panel-heading-row">
-              <div>
-                <p className="panel-kicker">Template setup</p>
-                <h2 className="title is-5">Create section template</h2>
+        {!isReadOnly && showTemplateSetup ? (
+          <div
+            className={showFormLibrary ? "column is-5-desktop" : "column is-12"}
+          >
+            <section className="panel-card">
+              <div className="panel-heading-row">
+                <div>
+                  <p className="panel-kicker">Template setup</p>
+                  <h2 className="title is-5">Create section template</h2>
+                </div>
+                <div className="panel-heading-actions">
+                  <button
+                    className="button is-light is-small"
+                    type="button"
+                    onClick={() => setIsExpandedEditorOpen(true)}
+                  >
+                    Open full editor
+                  </button>
+                  <span className="tag is-info is-light">
+                    {labs.length} labs
+                  </span>
+                </div>
               </div>
-              <div className="panel-heading-actions">
-                <button
-                  className="button is-light is-small"
-                  type="button"
-                  onClick={() => setIsExpandedEditorOpen(true)}
-                >
-                  Open full editor
-                </button>
-                <span className="tag is-info is-light">{labs.length} labs</span>
+
+              {renderTemplateSetupForm()}
+            </section>
+          </div>
+        ) : null}
+
+        {showFormLibrary ? (
+          <div
+            className={
+              isReadOnly || !showTemplateSetup
+                ? "column is-12"
+                : "column is-7-desktop"
+            }
+          >
+            <section className="panel-card">
+              <div className="panel-heading-row">
+                <div>
+                  <p className="panel-kicker">Form library</p>
+                  <h2 className="title is-5">
+                    {isReadOnly ? "Template library view" : "Template library"}
+                  </h2>
+                </div>
+                <span className="tag is-info is-light">
+                  {filteredTemplates.length}
+                </span>
               </div>
-            </div>
 
-            {renderTemplateSetupForm()}
-          </section>
-        </div>
-      ) : null}
+              {isReadOnly ? (
+                <p className="mini-note mb-4">
+                  You can review template coverage here, but template creation
+                  and updates stay with local admin / training coordinator
+                  accounts.
+                </p>
+              ) : null}
 
-      {showFormLibrary ? (
-      <div
-        className={
-          isReadOnly || !showTemplateSetup
-            ? "column is-12"
-            : "column is-7-desktop"
-        }
-      >
-        <section className="panel-card">
-          <div className="panel-heading-row">
-            <div>
-              <p className="panel-kicker">Form library</p>
-              <h2 className="title is-5">
-                {isReadOnly ? "Template library view" : "Template library"}
-              </h2>
-            </div>
-            <span className="tag is-info is-light">
-              {filteredTemplates.length}
-            </span>
+              {hiddenLegacyTemplateCount > 0 ? (
+                <p className="mini-note mb-4">
+                  {hiddenLegacyTemplateCount} old template
+                  {hiddenLegacyTemplateCount === 1 ? "" : "s"} hidden because
+                  the library now only uses split training-event and
+                  competency-assessment templates.
+                </p>
+              ) : null}
+
+              {printMessage ? (
+                <p className="mini-note">{printMessage}</p>
+              ) : null}
+
+              <div className="mode-toggle template-library-filter-toggle">
+                {templateLibraryFilterOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`mode-toggle-button ${
+                      templateLibraryFilter === option.value ? "is-active" : ""
+                    }`}
+                    onClick={() => setTemplateLibraryFilter(option.value)}
+                  >
+                    <strong>
+                      {option.label}{" "}
+                      <span className="tag is-light">
+                        {
+                          libraryFilterCounts[
+                            option.value as keyof typeof libraryFilterCounts
+                          ]
+                        }
+                      </span>
+                    </strong>
+                    <small>{option.description}</small>
+                  </button>
+                ))}
+              </div>
+
+              <div className="field">
+                <label className="label" htmlFor="template-search">
+                  Search templates
+                </label>
+                <input
+                  id="template-search"
+                  className="input"
+                  type="search"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Search name, lab, form family, staff type"
+                />
+              </div>
+
+              <div className="scroll-list template-list">
+                {filteredTemplates.length === 0 ? (
+                  <p className="empty-state">No templates available yet.</p>
+                ) : (
+                  <>
+                    {templateLibraryFilter !== "competency_assessment"
+                      ? renderTemplateGroup(
+                          "Training Events",
+                          "Initial training for staff starting a section or duty.",
+                          trainingEventTemplates,
+                        )
+                      : null}
+                    {templateLibraryFilter !== "training_event"
+                      ? renderTemplateGroup(
+                          "Competency Assessments",
+                          "Annual assessment records linked to the matching training event where available.",
+                          competencyAssessmentTemplates,
+                        )
+                      : null}
+                  </>
+                )}
+              </div>
+            </section>
           </div>
-
-          {isReadOnly ? (
-            <p className="mini-note mb-4">
-              You can review template coverage here, but template creation and
-              updates stay with local admin / training coordinator accounts.
-            </p>
-          ) : null}
-
-          {printMessage ? <p className="mini-note">{printMessage}</p> : null}
-
-          <div className="field">
-            <label className="label" htmlFor="template-search">
-              Search templates
-            </label>
-            <input
-              id="template-search"
-              className="input"
-              type="search"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search name, lab, form family, staff type"
-            />
-          </div>
-
-          <div className="scroll-list template-list">
-            {filteredTemplates.length === 0 ? (
-              <p className="empty-state">No templates available yet.</p>
-            ) : (
-              filteredTemplates.map((template) => (
-                <article className="list-card" key={template.id}>
-                  <div>
-                    <h3 className="list-title">{template.name}</h3>
-                    <p className="list-meta">
-                      {template.form_family_reference} ·{" "}
-                      {template.department_name} / {template.lab_name} ·{" "}
-                      {template.lab_hospital_name}
-                    </p>
-                    <p className="mini-note">
-                      {template.template_kind.replaceAll("_", " ")} ·{" "}
-                      {template.target_staff_type.replaceAll("_", " ")}
-                    </p>
-                  </div>
-
-                  <div className="tag-stack">
-                    {!isReadOnly ? (
-                      <button
-                        className="button is-danger is-small"
-                        type="button"
-                        onClick={() => {
-                          setPrintMessage(null);
-
-                          const confirmed = confirmManagedAction(
-                            currentUser,
-                            `Delete template "${template.name}"? This only works when there are no linked assignments or training records.`,
-                            "If linked data exists, delete will be blocked and you should archive the template instead. Please confirm again to continue."
-                          );
-
-                          if (!confirmed) {
-                            return;
-                          }
-
-                          startTransition(() => {
-                            void onDeleteTemplate(template.id).catch((error) => {
-                              setPrintMessage(
-                                error instanceof Error
-                                  ? error.message
-                                  : "Unable to delete template"
-                              );
-                            });
-                          });
-                        }}
-                      >
-                        Delete
-                      </button>
-                    ) : null}
-                    {!template.is_active && !isReadOnly ? (
-                      <button
-                        className="button is-link is-light is-small"
-                        type="button"
-                        onClick={() => {
-                          setPrintMessage(null);
-
-                          const confirmed = confirmManagedAction(
-                            currentUser,
-                            `Restore template "${template.name}"? Linked archived training records for this template will be restored with it.`,
-                            "Please confirm again to restore this template and its linked training records."
-                          );
-
-                          if (!confirmed) {
-                            return;
-                          }
-
-                          startTransition(() => {
-                            void onRestoreTemplate(template.id).catch((error) => {
-                              setPrintMessage(
-                                error instanceof Error
-                                  ? error.message
-                                  : "Unable to restore template"
-                              );
-                            });
-                          });
-                        }}
-                      >
-                        Restore
-                      </button>
-                    ) : null}
-                    {template.is_active && !isReadOnly ? (
-                      <button
-                        className="button is-danger is-light is-small"
-                        type="button"
-                        onClick={() => {
-                          setPrintMessage(null);
-
-                          const confirmed = confirmManagedAction(
-                            currentUser,
-                            `Archive template "${template.name}"? Linked training records for this template will be archived with it, and the template will stop appearing for new training.`,
-                            "Please confirm again to archive this template and its linked training records."
-                          );
-
-                          if (!confirmed) {
-                            return;
-                          }
-
-                          startTransition(() => {
-                            void onArchiveTemplate(template).catch((error) => {
-                              setPrintMessage(
-                                error instanceof Error
-                                  ? error.message
-                                  : "Unable to archive template"
-                              );
-                            });
-                          });
-                        }}
-                      >
-                        Archive
-                      </button>
-                    ) : null}
-                    <button
-                      className="button is-light is-small"
-                      type="button"
-                      onClick={() => {
-                        setPrintMessage(null);
-
-                        startTransition(() => {
-                          void onFetchTemplateDetail(template.id)
-                            .then((response) => {
-                              const templateDetail = response.template;
-                              const latestVersion =
-                                templateDetail.versions[0] || null;
-
-                              downloadTemplateDocument({
-                                filename: `${templateDetail.name
-                                  .toLowerCase()
-                                  .replaceAll(/[^a-z0-9]+/g, "-")
-                                  .replaceAll(/^-|-$/g, "") || "template"}-v${
-                                  latestVersion?.version_number ||
-                                  templateDetail.latest_version_number ||
-                                  1
-                                }.docx`,
-                                generatedBy: "Lab competence portal",
-                                title: templateDetail.name,
-                                subtitle: `${templateDetail.form_family_reference} · ${templateDetail.department_name} / ${templateDetail.lab_name} · ${templateDetail.lab_hospital_name}`,
-                                details: [
-                                  {
-                                    label: "Template type",
-                                    value: templateDetail.template_kind.replaceAll(
-                                      "_",
-                                      " "
-                                    ),
-                                  },
-                                  {
-                                    label: "Target staff type",
-                                    value:
-                                      templateDetail.target_staff_type.replaceAll(
-                                        "_",
-                                        " "
-                                      ),
-                                  },
-                                  {
-                                    label: "Latest version",
-                                    value:
-                                      latestVersion?.version_number ||
-                                      templateDetail.latest_version_number ||
-                                      1,
-                                  },
-                                  {
-                                    label: "Status",
-                                    value: templateDetail.is_active
-                                      ? "Active"
-                                      : "Inactive",
-                                  },
-                                  {
-                                    label: "Department",
-                                    value:
-                                      templateDetail.department_name,
-                                  },
-                                  {
-                                    label: "Training unit",
-                                    value: templateDetail.lab_name,
-                                  },
-                                ],
-                                schemaJson: latestVersion?.schema_json,
-                              });
-                            })
-                            .catch((error) => {
-                              setPrintMessage(
-                                error instanceof Error
-                                  ? error.message
-                                  : "Unable to print template"
-                              );
-                            });
-                        });
-                      }}
-                    >
-                      Download DOCX
-                    </button>
-                    <span className="tag is-link is-light">
-                      v{template.latest_version_number || 1}
-                    </span>
-                    {template.is_active ? (
-                      <span className="tag is-success is-light">active</span>
-                    ) : (
-                      <span className="tag is-light">inactive</span>
-                    )}
-                  </div>
-                </article>
-              ))
-            )}
-          </div>
-        </section>
-      </div>
-      ) : null}
+        ) : null}
       </section>
     </>
   );

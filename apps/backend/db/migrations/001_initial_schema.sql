@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS templates (
   lab_id INTEGER REFERENCES labs(id) ON DELETE CASCADE,
   created_by INTEGER REFERENCES users(id),
   form_family_reference TEXT NOT NULL DEFAULT 'FOR-CUH-PAT-2',
-  template_kind TEXT NOT NULL DEFAULT 'training_event_competency',
+  template_kind TEXT NOT NULL DEFAULT 'training_event',
   target_staff_type TEXT NOT NULL DEFAULT 'basic_grade_scientist',
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT NOW()
