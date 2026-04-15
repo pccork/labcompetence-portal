@@ -25,6 +25,12 @@ The current reset/import flow expects two folders:
 - `competency-assessment/` for annual competency-assessment forms linked back
   to the matching training event where the filename area matches.
 
+These folders are registered in the DevOps template library manifest:
+
+```bash
+apps/backend/template-samples/template-library.json
+```
+
 To rebuild the database template setup from those folders, run:
 
 ```bash

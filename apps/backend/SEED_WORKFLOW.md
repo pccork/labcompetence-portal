@@ -154,7 +154,26 @@ This will:
 - seed anonymised demo repo data
 - then apply the private Render overlay
 
-### 9. Hand over to the real co-ordinator
+### 9. Load the DevOps template library
+
+The split FOR-CUH-PAT-2 template library is tracked in:
+
+```bash
+apps/backend/template-samples/template-library.json
+```
+
+The manifest includes:
+
+- `apps/backend/template-samples/training-event`
+- `apps/backend/template-samples/competency-assessment`
+
+After migrations and seed, rebuild the Form library from those folders:
+
+```bash
+pnpm --filter backend run reset:templates
+```
+
+### 10. Hand over to the real co-ordinator
 
 Use this checklist:
 

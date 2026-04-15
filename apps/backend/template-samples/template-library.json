@@ -1,0 +1,16 @@
+{
+  "name": "FOR-CUH-PAT-2 split template library",
+  "description": "DevOps template library sources for rebuilding the application Form library from uploaded Word templates.",
+  "sources": [
+    {
+      "kind": "training_event",
+      "path": "training-event",
+      "description": "Initial training-event templates for staff starting a section or duty."
+    },
+    {
+      "kind": "competency_assessment",
+      "path": "competency-assessment",
+      "description": "Annual competency-assessment templates linked back to matching training events when available."
+    }
+  ]
+}

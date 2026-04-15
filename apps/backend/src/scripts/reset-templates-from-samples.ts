@@ -14,13 +14,19 @@ const pool = new Pool({
 const formFamilyReference = "FOR-CUH-PAT-2";
 const repoRoot = path.resolve(__dirname, "../../../..");
 const samplesRoot = path.resolve(__dirname, "../../template-samples");
-const trainingEventRoot = path.join(samplesRoot, "training-event");
-const competencyAssessmentRoot = path.join(
+const templateLibraryManifestPath = path.join(
   samplesRoot,
-  "competency-assessment",
+  "template-library.json",
 );
 
 type TemplateKind = "training_event" | "competency_assessment";
+
+interface TemplateLibraryManifest {
+  sources: Array<{
+    kind: TemplateKind;
+    path: string;
+  }>;
+}
 
 interface SampleTemplate {
   kind: TemplateKind;
@@ -70,6 +76,39 @@ const displayNameOverrides = new Map<string, string>([
   ["URINE MLA", "Urine MLA"],
   ["AUTHORISATION OF RESULTS", "Authorisation of Results"],
 ]);
+
+function readTemplateLibraryManifest() {
+  if (!fs.existsSync(templateLibraryManifestPath)) {
+    throw new Error(
+      `Missing template library manifest: ${templateLibraryManifestPath}`,
+    );
+  }
+
+  const manifest = JSON.parse(
+    fs.readFileSync(templateLibraryManifestPath, "utf8"),
+  ) as TemplateLibraryManifest;
+
+  const trainingEventSource = manifest.sources.find(
+    (source) => source.kind === "training_event",
+  );
+  const competencyAssessmentSource = manifest.sources.find(
+    (source) => source.kind === "competency_assessment",
+  );
+
+  if (!trainingEventSource || !competencyAssessmentSource) {
+    throw new Error(
+      "Template library manifest must include training_event and competency_assessment sources.",
+    );
+  }
+
+  return {
+    trainingEventRoot: path.resolve(samplesRoot, trainingEventSource.path),
+    competencyAssessmentRoot: path.resolve(
+      samplesRoot,
+      competencyAssessmentSource.path,
+    ),
+  };
+}
 
 function normaliseSampleKey(value: string) {
   return value
@@ -458,6 +497,8 @@ async function createTemplateWithVersion(
 }
 
 async function resetTemplatesFromSamples() {
+  const { trainingEventRoot, competencyAssessmentRoot } =
+    readTemplateLibraryManifest();
   const trainingEvents = listSamples(trainingEventRoot, "training_event");
   const competencyAssessments = listSamples(
     competencyAssessmentRoot,
