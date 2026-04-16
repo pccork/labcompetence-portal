@@ -18,6 +18,7 @@ const privateSeedFilePath = process.env.PRIVATE_SEED_FILE
   : path.resolve(__dirname, "../../private-seed/private-seed.json");
 
 interface PrivateSeedFile {
+  resetTrainingData?: boolean;
   hospitals?: Array<{
     name: string;
   }>;
@@ -704,6 +705,15 @@ async function seedPrivateOverlay(defaultPasswordHash: string) {
     fs.readFileSync(privateSeedFilePath, "utf8"),
   ) as PrivateSeedFile;
 
+  if (privateSeed.resetTrainingData) {
+    await pool.query("DELETE FROM acknowledgements");
+    await pool.query("DELETE FROM training_record_specimens");
+    await pool.query("DELETE FROM training_records");
+    await pool.query("DELETE FROM training_assignments");
+    await pool.query("DELETE FROM template_versions");
+    await pool.query("DELETE FROM templates");
+  }
+
   const hospitalIds = new Map<string, number>();
   const departmentIds = new Map<string, number>();
   const trainingUnitIds = new Map<string, number>();
@@ -802,6 +812,16 @@ async function seedPrivateOverlay(defaultPasswordHash: string) {
     });
 
     userIds.set(user.email, userId);
+
+    if (privateSeed.resetTrainingData) {
+      await pool.query(
+        `
+        DELETE FROM user_training_units
+        WHERE user_id = $1
+        `,
+        [userId],
+      );
+    }
 
     for (const trainingUnitName of user.trainingUnitNames ?? []) {
       const matchingTrainingUnitEntry = [...trainingUnitIds.entries()].find(
