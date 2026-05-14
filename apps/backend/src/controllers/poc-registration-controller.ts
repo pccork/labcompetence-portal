@@ -19,6 +19,7 @@ import {
   findPocRegistrationLinkByCode,
   PocTrainingRequest,
   findPocTrainingRequestById,
+  listPocTrainingRequestRecipients,
   listPocRegistrationLinks,
   listPocTrainingRequests,
   registerTraineeFromPocLink,
@@ -88,6 +89,17 @@ function buildPocReplyDedupeKey(request: PocTrainingRequest) {
     request.training_location?.trim() || "",
     request.training_time_details?.trim() || "",
     request.trainer_message?.trim() || "",
+  ].join(":");
+}
+
+function buildPocTrainerNotificationDedupeKey(
+  request: PocTrainingRequest,
+  trainerEmail: string,
+) {
+  return [
+    "poc_training_request_trainer",
+    request.id,
+    trainerEmail.trim().toLowerCase(),
   ].join(":");
 }
 
@@ -339,6 +351,56 @@ const pocRegistrationRoutes: FastifyPluginAsync = async (fastify) => {
             .status(404)
             .send({ message: "POC registration link not found" });
         }
+
+        const trainerRecipients = await listPocTrainingRequestRecipients(
+          fastify.db,
+          registration.trainingRequest.id
+        );
+
+        void Promise.all(
+          trainerRecipients.map((recipient) =>
+            withEmailDispatchGuard(fastify.db, {
+              dedupeKey: buildPocTrainerNotificationDedupeKey(
+                registration.trainingRequest,
+                recipient.email,
+              ),
+              entityId: registration.trainingRequest.id,
+              entityType: "poc_training_request",
+              notificationType: "poc_training_request_trainer_notification",
+              payloadSummary: {
+                deviceName: registration.trainingRequest.lab_name,
+                traineeEmail: registration.trainingRequest.trainee_email,
+                traineeName: registration.trainingRequest.trainee_name,
+              },
+              recipientEmail: recipient.email,
+              send: () =>
+                fastify.emailService.sendTrainingRequestTrainerNotificationEmail({
+                  trainerName: recipient.name,
+                  trainerEmail: recipient.email,
+                  traineeName: registration.trainingRequest.trainee_name,
+                  traineeEmail: registration.trainingRequest.trainee_email,
+                  traineeHospitalName:
+                    registration.trainingRequest.trainee_hospital_name,
+                  staffType: registration.trainingRequest.trainee_staff_type,
+                  deviceName: registration.trainingRequest.lab_name,
+                  hospitalName: registration.trainingRequest.lab_hospital_name,
+                  location: registration.trainingRequest.training_location,
+                  timeDetails:
+                    registration.trainingRequest.training_time_details,
+                  requestedAt: registration.trainingRequest.requested_at,
+                }),
+            }).catch((error) => {
+              request.log.error(
+                {
+                  err: error,
+                  requestId: registration.trainingRequest.id,
+                  recipientEmail: recipient.email,
+                },
+                "Failed to send POCT trainer notification email",
+              );
+            }),
+          ),
+        );
 
         return reply.status(201).send({ registration });
       } catch (error: any) {

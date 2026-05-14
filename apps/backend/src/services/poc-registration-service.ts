@@ -59,6 +59,13 @@ export interface PocTrainingRequest {
   requested_at: Date;
 }
 
+export interface PocTrainingRequestRecipient {
+  id: number;
+  name: string;
+  email: string;
+  role: Role;
+}
+
 export async function listPocRegistrationLinks(
   db: Pool,
   trainingUnitIds?: number[]
@@ -459,6 +466,37 @@ export async function findPocTrainingRequestById(
   );
 
   return result.rows[0];
+}
+
+export async function listPocTrainingRequestRecipients(
+  db: Pool,
+  requestId: number
+) {
+  const result = await db.query<PocTrainingRequestRecipient>(
+    `
+    SELECT DISTINCT
+      u.id,
+      u.name,
+      u.email,
+      u.role
+    FROM poc_training_requests ptr
+    INNER JOIN user_training_units utu ON utu.training_unit_id = ptr.training_unit_id
+    INNER JOIN users u ON u.id = utu.user_id
+    WHERE ptr.id = $1
+      AND u.is_active = true
+      AND u.role IN ($2, $3)
+    ORDER BY
+      CASE WHEN u.role = $2 THEN 0 ELSE 1 END,
+      u.name ASC
+    `,
+    [
+      requestId,
+      Role.TRAINER,
+      Role.ADMIN,
+    ]
+  );
+
+  return result.rows;
 }
 
 export async function replyToPocTrainingRequest(

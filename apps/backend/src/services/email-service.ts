@@ -21,6 +21,21 @@ export interface TrainingRequestReplyEmailInput {
   traineeName: string;
 }
 
+export interface TrainingRequestTrainerNotificationEmailInput {
+  coordinatorUrl?: string | null;
+  deviceName: string;
+  hospitalName: string;
+  location?: string | null;
+  requestedAt: Date | string;
+  staffType: string;
+  timeDetails?: string | null;
+  traineeEmail: string;
+  traineeHospitalName: string;
+  traineeName: string;
+  trainerEmail: string;
+  trainerName: string;
+}
+
 export interface TrainingAssignmentReminderEmailInput {
   departmentName: string;
   hospitalName: string;
@@ -40,6 +55,9 @@ export interface EmailService {
   ): Promise<void>;
   sendTrainingRequestReplyEmail(
     input: TrainingRequestReplyEmailInput,
+  ): Promise<void>;
+  sendTrainingRequestTrainerNotificationEmail(
+    input: TrainingRequestTrainerNotificationEmailInput,
   ): Promise<void>;
 }
 
@@ -206,6 +224,73 @@ function buildTrainingReplyEmail(
   };
 }
 
+function buildTrainingRequestTrainerNotificationEmail(
+  input: TrainingRequestTrainerNotificationEmailInput,
+  appBaseUrl?: string,
+): OutboundEmail {
+  const location = normalizeLine(input.location);
+  const timeDetails = normalizeLine(input.timeDetails);
+  const requestedAt = formatDate(input.requestedAt);
+  const portalUrl = input.coordinatorUrl || appBaseUrl;
+  const subject = `POCT training request: ${input.deviceName} (${input.traineeName})`;
+  const greeting = `Hello ${input.trainerName},`;
+  const summary = `${input.traineeName} has requested POCT training for ${input.deviceName}.`;
+  const action =
+    "Please contact the trainee to arrange the training event, then update the POCT request desk with the agreed date, time, and location.";
+  const cta = portalUrl
+    ? `Open the POCT request desk here: ${portalUrl}`
+    : null;
+  const messageLines = [
+    greeting,
+    "",
+    summary,
+    "",
+    `Trainee: ${input.traineeName}`,
+    `Trainee email: ${input.traineeEmail}`,
+    `Trainee hospital: ${input.traineeHospitalName}`,
+    `Staff type: ${input.staffType}`,
+    `Device / pathway: ${input.deviceName}`,
+    `POCT hospital: ${input.hospitalName}`,
+    `Preferred location: ${location}`,
+    `Preferred date and time: ${timeDetails}`,
+    `Requested: ${requestedAt}`,
+    "",
+    action,
+    ...(cta ? ["", cta] : []),
+  ];
+
+  return {
+    to: input.trainerEmail,
+    subject,
+    text: messageLines.join("\n"),
+    html: `
+      <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #102a43;">
+        <p>${escapeHtml(greeting)}</p>
+        <p>${escapeHtml(summary)}</p>
+        <table style="border-collapse: collapse; margin: 16px 0;">
+          <tbody>
+            <tr><td style="padding: 6px 12px 6px 0;"><strong>Trainee</strong></td><td>${escapeHtml(input.traineeName)}</td></tr>
+            <tr><td style="padding: 6px 12px 6px 0;"><strong>Trainee email</strong></td><td>${escapeHtml(input.traineeEmail)}</td></tr>
+            <tr><td style="padding: 6px 12px 6px 0;"><strong>Trainee hospital</strong></td><td>${escapeHtml(input.traineeHospitalName)}</td></tr>
+            <tr><td style="padding: 6px 12px 6px 0;"><strong>Staff type</strong></td><td>${escapeHtml(input.staffType)}</td></tr>
+            <tr><td style="padding: 6px 12px 6px 0;"><strong>Device / pathway</strong></td><td>${escapeHtml(input.deviceName)}</td></tr>
+            <tr><td style="padding: 6px 12px 6px 0;"><strong>POCT hospital</strong></td><td>${escapeHtml(input.hospitalName)}</td></tr>
+            <tr><td style="padding: 6px 12px 6px 0;"><strong>Preferred location</strong></td><td>${escapeHtml(location)}</td></tr>
+            <tr><td style="padding: 6px 12px 6px 0;"><strong>Preferred date and time</strong></td><td>${escapeHtml(timeDetails)}</td></tr>
+            <tr><td style="padding: 6px 12px 6px 0;"><strong>Requested</strong></td><td>${escapeHtml(requestedAt)}</td></tr>
+          </tbody>
+        </table>
+        <p>${escapeHtml(action)}</p>
+        ${
+          cta
+            ? `<p><a href="${escapeHtml(portalUrl || "")}">${escapeHtml(cta)}</a></p>`
+            : ""
+        }
+      </div>
+    `,
+  };
+}
+
 class DisabledEmailService implements EmailService {
   isConfigured() {
     return false;
@@ -219,6 +304,10 @@ class DisabledEmailService implements EmailService {
 
   async sendTrainingRequestReplyEmail(
     _input: TrainingRequestReplyEmailInput,
+  ) {}
+
+  async sendTrainingRequestTrainerNotificationEmail(
+    _input: TrainingRequestTrainerNotificationEmailInput,
   ) {}
 }
 
@@ -275,6 +364,14 @@ class SmtpEmailService implements EmailService {
   async sendTrainingRequestReplyEmail(input: TrainingRequestReplyEmailInput) {
     await this.sendMail(buildTrainingReplyEmail(input, this.appBaseUrl));
   }
+
+  async sendTrainingRequestTrainerNotificationEmail(
+    input: TrainingRequestTrainerNotificationEmailInput,
+  ) {
+    await this.sendMail(
+      buildTrainingRequestTrainerNotificationEmail(input, this.appBaseUrl),
+    );
+  }
 }
 
 class ResendEmailService implements EmailService {
@@ -320,6 +417,14 @@ class ResendEmailService implements EmailService {
 
   async sendTrainingRequestReplyEmail(input: TrainingRequestReplyEmailInput) {
     await this.sendMail(buildTrainingReplyEmail(input, this.appBaseUrl));
+  }
+
+  async sendTrainingRequestTrainerNotificationEmail(
+    input: TrainingRequestTrainerNotificationEmailInput,
+  ) {
+    await this.sendMail(
+      buildTrainingRequestTrainerNotificationEmail(input, this.appBaseUrl),
+    );
   }
 }
 
