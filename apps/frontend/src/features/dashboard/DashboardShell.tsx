@@ -91,6 +91,10 @@ interface DashboardShellProps {
     input: CreatePocRegistrationLinkInput,
   ) => Promise<void>;
   onDeletePocRegistrationLink: (code: string) => Promise<void>;
+  onUpdatePocRegistrationLinkStatus: (
+    code: string,
+    isActive: boolean,
+  ) => Promise<void>;
   onReplyToPocRequest: (
     requestId: number,
     input: ReplyToPocTrainingRequestInput,
@@ -162,6 +166,7 @@ export function DashboardShell({
   onFetchRecordDetail,
   onCreatePocRegistrationLink,
   onDeletePocRegistrationLink,
+  onUpdatePocRegistrationLinkStatus,
   onReplyToPocRequest,
   onSignOut,
   errorMessage,
@@ -621,6 +626,7 @@ export function DashboardShell({
             requests={poctRequests}
             onCreateRegistrationLink={onCreatePocRegistrationLink}
             onDeleteRegistrationLink={onDeletePocRegistrationLink}
+            onUpdateRegistrationLinkStatus={onUpdatePocRegistrationLinkStatus}
             onReplyToRequest={onReplyToPocRequest}
           />
         ) : null}

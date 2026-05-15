@@ -602,6 +602,21 @@ export async function deletePocRegistrationLink(token: string, code: string) {
   );
 }
 
+export async function updatePocRegistrationLinkStatus(
+  token: string,
+  code: string,
+  isActive: boolean,
+) {
+  return apiRequest<{ registrationLink: PocRegistrationLinkSummary }>(
+    `/poc/registration-links/${code}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ isActive }),
+    },
+    token
+  );
+}
+
 export async function fetchPublicPocRegistrationLink(code: string) {
   return apiRequest<{ registrationLink: PocRegistrationLinkSummary }>(
     `/poc/registration-links/${code}`

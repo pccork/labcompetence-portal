@@ -60,6 +60,7 @@ import {
   TrainingRecordSummary,
   UpdateTrainingAssignmentInput,
   updateTrainingAssignment,
+  updatePocRegistrationLinkStatus,
   updateTemplate,
   UserSummary,
 } from "../features/dashboard/api";
@@ -474,6 +475,13 @@ export function App() {
       }}
       onDeletePocRegistrationLink={async (code: string) => {
         await deletePocRegistrationLink(token, code);
+        await loadDashboard(token);
+      }}
+      onUpdatePocRegistrationLinkStatus={async (
+        code: string,
+        isActive: boolean,
+      ) => {
+        await updatePocRegistrationLinkStatus(token, code, isActive);
         await loadDashboard(token);
       }}
       onReplyToPocRequest={async (requestId, input) => {

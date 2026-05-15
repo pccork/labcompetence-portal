@@ -19,6 +19,10 @@ interface PoctRequestPanelProps {
     input: CreatePocRegistrationLinkInput,
   ) => Promise<void>;
   onDeleteRegistrationLink: (code: string) => Promise<void>;
+  onUpdateRegistrationLinkStatus: (
+    code: string,
+    isActive: boolean,
+  ) => Promise<void>;
   onReplyToRequest: (
     requestId: number,
     input: ReplyToPocTrainingRequestInput,
@@ -169,6 +173,7 @@ export function PoctRequestPanel({
   requests,
   onCreateRegistrationLink,
   onDeleteRegistrationLink,
+  onUpdateRegistrationLinkStatus,
   onReplyToRequest,
 }: PoctRequestPanelProps) {
   const poctLabs = useMemo(() => labs.filter((lab) => lab.is_poc), [labs]);
@@ -674,6 +679,40 @@ export function PoctRequestPanel({
                       disabled={!link.is_active}
                     >
                       Print label
+                    </button>
+                    <button
+                      className="button is-small is-light"
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => {
+                        const nextStatus = !link.is_active;
+
+                        setMessage(null);
+                        setErrorMessage(null);
+
+                        startTransition(() => {
+                          void onUpdateRegistrationLinkStatus(
+                            link.code,
+                            nextStatus,
+                          )
+                            .then(() => {
+                              setMessage(
+                                nextStatus
+                                  ? "POCT registration link activated."
+                                  : "POCT registration link deactivated.",
+                              );
+                            })
+                            .catch((error) => {
+                              setErrorMessage(
+                                error instanceof Error
+                                  ? error.message
+                                  : "Unable to update POCT registration link",
+                              );
+                            });
+                        });
+                      }}
+                    >
+                      {link.is_active ? "Deactivate" : "Activate"}
                     </button>
                     <button
                       className="button is-small is-danger is-light"
