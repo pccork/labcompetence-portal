@@ -18,6 +18,7 @@ interface PoctRequestPanelProps {
   onCreateRegistrationLink: (
     input: CreatePocRegistrationLinkInput,
   ) => Promise<void>;
+  onDeleteRegistrationLink: (code: string) => Promise<void>;
   onReplyToRequest: (
     requestId: number,
     input: ReplyToPocTrainingRequestInput,
@@ -58,7 +59,16 @@ function buildGroupKey(request: PocTrainingRequestSummary) {
   ].join("::");
 }
 
-function printRegistrationLabel(url: string, title: string) {
+function escapePrintHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function printRegistrationLabel(url: string, title: string, location: string) {
   const printWindow = window.open("", "_blank", "width=760,height=960");
 
   if (!printWindow) {
@@ -100,10 +110,11 @@ function printRegistrationLabel(url: string, title: string) {
         </style>
       </head>
       <body>
-        <h1>${title}</h1>
+        <h1>${escapePrintHtml(title)}</h1>
+        <p><strong>Location:</strong> ${escapePrintHtml(location)}</p>
         <p>Scan this QR code to submit a POCT training request.</p>
         <div class="qr"><img alt="QR code" src="${url}" /></div>
-        <div class="url">${url}</div>
+        <div class="url">${escapePrintHtml(url)}</div>
       </body>
     </html>
   `);
@@ -157,15 +168,13 @@ export function PoctRequestPanel({
   registrationLinks,
   requests,
   onCreateRegistrationLink,
+  onDeleteRegistrationLink,
   onReplyToRequest,
 }: PoctRequestPanelProps) {
   const poctLabs = useMemo(() => labs.filter((lab) => lab.is_poc), [labs]);
   const [labId, setLabId] = useState<number | "">("");
   const [defaultTrainingLocation, setDefaultTrainingLocation] = useState(
     "A/E reception",
-  );
-  const [defaultTrainingTimeDetails, setDefaultTrainingTimeDetails] = useState(
-    "To be confirmed",
   );
   const [selectedRequestIds, setSelectedRequestIds] = useState<number[]>([]);
   const [replyStatus, setReplyStatus] = useState<"scheduled" | "cancelled">(
@@ -182,6 +191,10 @@ export function PoctRequestPanel({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [copiedLinkCode, setCopiedLinkCode] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const activeLinkCount = useMemo(
+    () => registrationLinks.filter((link) => link.is_active).length,
+    [registrationLinks],
+  );
 
   const groupedRequests = useMemo(() => {
     const groups = new Map<string, RequestGroup>();
@@ -339,7 +352,9 @@ export function PoctRequestPanel({
               <p className="panel-kicker">POCT registration</p>
               <h2 className="title is-5">Create QR request link</h2>
             </div>
-            <span className="tag is-light">{registrationLinks.length} links</span>
+            <span className="tag is-light">
+              {activeLinkCount} active / {registrationLinks.length} total
+            </span>
           </div>
 
           <form
@@ -358,7 +373,6 @@ export function PoctRequestPanel({
                 void onCreateRegistrationLink({
                   labId,
                   defaultTrainingLocation,
-                  defaultTrainingTimeDetails,
                 })
                   .then(() => {
                     setMessage("POCT registration link created.");
@@ -409,21 +423,6 @@ export function PoctRequestPanel({
                 onChange={(event) =>
                   setDefaultTrainingLocation(event.target.value)
                 }
-              />
-            </div>
-
-            <div className="field">
-              <label className="label" htmlFor="poct-link-time">
-                Default time notes
-              </label>
-              <textarea
-                id="poct-link-time"
-                className="textarea"
-                value={defaultTrainingTimeDetails}
-                onChange={(event) =>
-                  setDefaultTrainingTimeDetails(event.target.value)
-                }
-                rows={3}
               />
             </div>
 
@@ -612,6 +611,15 @@ export function PoctRequestPanel({
             </div>
           </div>
 
+          {message ? (
+            <div className="notification is-success is-light">{message}</div>
+          ) : null}
+          {errorMessage ? (
+            <div className="notification is-danger is-light">
+              {errorMessage}
+            </div>
+          ) : null}
+
           <div className="scroll-list poct-link-grid">
             {registrationLinks.map((link) => {
               const url = buildRegistrationUrl(link.code);
@@ -624,9 +632,16 @@ export function PoctRequestPanel({
                       {link.department_name} / {link.lab_name}
                     </p>
                     <p className="mini-note">
-                      {link.default_training_location || "Location not set"} ·{" "}
-                      {link.default_training_time_details ||
-                        "Time details not set"}
+                      {link.default_training_location || "Location not set"}
+                    </p>
+                    <p className="mini-note">
+                      <span
+                        className={`tag ${
+                          link.is_active ? "is-success" : "is-light"
+                        }`}
+                      >
+                        {link.is_active ? "Active" : "Inactive"}
+                      </span>
                     </p>
                     <p className="list-meta">{url}</p>
                   </div>
@@ -649,9 +664,49 @@ export function PoctRequestPanel({
                     <button
                       className="button is-small is-link is-light"
                       type="button"
-                      onClick={() => printRegistrationLabel(url, link.lab_name)}
+                      onClick={() =>
+                        printRegistrationLabel(
+                          url,
+                          link.lab_name,
+                          link.default_training_location || "Location not set",
+                        )
+                      }
+                      disabled={!link.is_active}
                     >
                       Print label
+                    </button>
+                    <button
+                      className="button is-small is-danger is-light"
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => {
+                        const confirmed = window.confirm(
+                          `Delete the ${link.lab_name} registration link? This only works if no requests were submitted through it.`,
+                        );
+
+                        if (!confirmed) {
+                          return;
+                        }
+
+                        setMessage(null);
+                        setErrorMessage(null);
+
+                        startTransition(() => {
+                          void onDeleteRegistrationLink(link.code)
+                            .then(() => {
+                              setMessage("POCT registration link deleted.");
+                            })
+                            .catch((error) => {
+                              setErrorMessage(
+                                error instanceof Error
+                                  ? error.message
+                                  : "Unable to delete POCT registration link",
+                              );
+                            });
+                        });
+                      }}
+                    >
+                      Delete
                     </button>
                   </div>
                 </article>

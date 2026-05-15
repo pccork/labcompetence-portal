@@ -19,6 +19,7 @@ import {
   TrainingAssignmentSummary,
   TrainingRecordDetail,
   TrainingRecordSummary,
+  UpdateTrainingAssignmentInput,
   UserSummary,
 } from "./api";
 import { DashboardMetrics } from "./components/DashboardMetrics";
@@ -78,6 +79,10 @@ interface DashboardShellProps {
     templateId: number,
   ) => Promise<{ template: TemplateDetail }>;
   onCreateAssignment: (input: CreateTrainingAssignmentInput) => Promise<void>;
+  onUpdateAssignment: (
+    assignmentId: number,
+    input: UpdateTrainingAssignmentInput,
+  ) => Promise<void>;
   onCreateRecord: (input: CreateTrainingRecordInput) => Promise<void>;
   onFetchRecordDetail: (
     recordId: number,
@@ -85,6 +90,7 @@ interface DashboardShellProps {
   onCreatePocRegistrationLink: (
     input: CreatePocRegistrationLinkInput,
   ) => Promise<void>;
+  onDeletePocRegistrationLink: (code: string) => Promise<void>;
   onReplyToPocRequest: (
     requestId: number,
     input: ReplyToPocTrainingRequestInput,
@@ -151,9 +157,11 @@ export function DashboardShell({
   onRestoreTemplate,
   onFetchTemplateDetail,
   onCreateAssignment,
+  onUpdateAssignment,
   onCreateRecord,
   onFetchRecordDetail,
   onCreatePocRegistrationLink,
+  onDeletePocRegistrationLink,
   onReplyToPocRequest,
   onSignOut,
   errorMessage,
@@ -487,6 +495,7 @@ export function DashboardShell({
                   users={users}
                   selectedLabName={selectedLabName}
                   onCreateAssignment={onCreateAssignment}
+                  onUpdateAssignment={onUpdateAssignment}
                   showPlanner={false}
                   showQueue
                 />
@@ -499,6 +508,7 @@ export function DashboardShell({
                   users={users}
                   selectedLabName={selectedLabName}
                   onCreateAssignment={onCreateAssignment}
+                  onUpdateAssignment={onUpdateAssignment}
                   showPlanner
                   showQueue={false}
                 />
@@ -597,6 +607,7 @@ export function DashboardShell({
             users={users}
             selectedLabName={selectedLabName}
             onCreateAssignment={onCreateAssignment}
+            onUpdateAssignment={onUpdateAssignment}
           />
         ) : null}
 
@@ -609,6 +620,7 @@ export function DashboardShell({
             registrationLinks={registrationLinks}
             requests={poctRequests}
             onCreateRegistrationLink={onCreatePocRegistrationLink}
+            onDeleteRegistrationLink={onDeletePocRegistrationLink}
             onReplyToRequest={onReplyToPocRequest}
           />
         ) : null}

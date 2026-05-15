@@ -82,7 +82,8 @@ const templateSummarySelect = `
 export async function listTemplates(
   db: Pool,
   hospitalId?: number,
-  trainingUnitIds?: number[]
+  trainingUnitIds?: number[],
+  assignedUserId?: number
 ) {
   const result = await db.query<TrainingTemplate>(
     `
@@ -91,10 +92,20 @@ export async function listTemplates(
       AND (
         $2::int[] IS NULL
         OR t.training_unit_id = ANY($2::int[])
+        OR (
+          $3::int IS NOT NULL
+          AND EXISTS (
+            SELECT 1
+            FROM training_assignments ta
+            WHERE ta.training_unit_id = t.training_unit_id
+              AND ta.user_id = $3
+              AND ta.is_active = true
+          )
+        )
       )
     ORDER BY h.name ASC, l.name ASC, t.name ASC
     `,
-    [hospitalId ?? null, trainingUnitIds ?? null]
+    [hospitalId ?? null, trainingUnitIds ?? null, assignedUserId ?? null]
   );
 
   return result.rows;

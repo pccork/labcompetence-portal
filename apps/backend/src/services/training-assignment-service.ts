@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { Pool, PoolClient } from "pg";
 import { StaffType } from "shared-types";
 
 export interface TrainingAssignment {
@@ -214,49 +214,71 @@ export async function createTrainingAssignment(
     nextDueAt: string;
   }
 ) {
-  const result = await db.query<{ id: number }>(
-    `
-    INSERT INTO training_assignments (
-      user_id,
-      template_id,
-      lab_id,
-      training_unit_id,
-      assigned_by,
-      renewal_interval_months,
-      next_due_at
-    )
-    VALUES (
-      $1,
-      $2,
-      (SELECT lab_id FROM training_units WHERE id = $3),
-      $3,
-      $4,
-      $5,
-      $6
-    )
-    RETURNING id
-    `,
-    [
-      input.userId,
-      input.templateId,
-      input.labId,
-      input.assignedBy,
-      input.renewalIntervalMonths,
-      input.nextDueAt,
-    ]
-  );
+  const client = await db.connect();
 
-  const assignmentId = result.rows[0]?.id;
+  try {
+    await client.query("BEGIN");
 
-  if (!assignmentId) {
-    throw new Error("Failed to create training assignment");
+    await client.query(
+      `
+      INSERT INTO user_training_units (user_id, training_unit_id)
+      VALUES ($1, $2)
+      ON CONFLICT DO NOTHING
+      `,
+      [input.userId, input.labId]
+    );
+
+    const result = await client.query<{ id: number }>(
+      `
+      INSERT INTO training_assignments (
+        user_id,
+        template_id,
+        lab_id,
+        training_unit_id,
+        assigned_by,
+        renewal_interval_months,
+        next_due_at
+      )
+      VALUES (
+        $1,
+        $2,
+        (SELECT lab_id FROM training_units WHERE id = $3),
+        $3,
+        $4,
+        $5,
+        $6
+      )
+      RETURNING id
+      `,
+      [
+        input.userId,
+        input.templateId,
+        input.labId,
+        input.assignedBy,
+        input.renewalIntervalMonths,
+        input.nextDueAt,
+      ]
+    );
+
+    const assignmentId = result.rows[0]?.id;
+
+    if (!assignmentId) {
+      throw new Error("Failed to create training assignment");
+    }
+
+    await client.query("COMMIT");
+
+    return findTrainingAssignmentById(db, assignmentId);
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
-
-  return findTrainingAssignmentById(db, assignmentId);
 }
 
 export async function findTrainingAssignmentById(
-  db: Pool,
+  db: Pool | PoolClient,
   assignmentId: number
 ) {
   const result = await db.query<TrainingAssignment>(

@@ -16,6 +16,7 @@ import {
 } from "../services/access-policy-service";
 import {
   createPocRegistrationLink,
+  deletePocRegistrationLinkIfUnused,
   findPocRegistrationLinkByCode,
   PocTrainingRequest,
   findPocTrainingRequestById,
@@ -262,6 +263,69 @@ const pocRegistrationRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return { registrationLink: updatedLink };
+    }
+  );
+
+  fastify.delete<RegistrationLinkParams>(
+    "/poc/registration-links/:code",
+    {
+      preHandler: [
+        fastify.authenticate,
+        fastify.requireRole(Role.ADMIN),
+      ],
+    },
+    async (request, reply) => {
+      const registrationLink = await findPocRegistrationLinkByCode(
+        fastify.db,
+        request.params.code
+      );
+
+      if (!registrationLink) {
+        return reply
+          .status(404)
+          .send({ message: "POC registration link not found" });
+      }
+
+      const scope = await getHospitalAccessScope(
+        fastify.db,
+        Number(request.user.id)
+      );
+
+      if (!scope) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      if (
+        !canAccessHospital(
+          scope,
+          registrationLink.hospital_id,
+          registrationLink.lab_is_poc
+        ) ||
+        !canAccessTrainingUnit(
+          scope,
+          registrationLink.lab_id,
+          registrationLink.hospital_id,
+          registrationLink.lab_is_poc
+        )
+      ) {
+        return reply.status(403).send({
+          message: "You cannot delete this POC registration link",
+        });
+      }
+
+      const deleted = await deletePocRegistrationLinkIfUnused(
+        fastify.db,
+        request.params.code
+      );
+
+      if (!deleted) {
+        return reply.status(409).send({
+          message:
+            "This POC registration link has submitted requests. Deactivate it instead of deleting it.",
+        });
+      }
+
+      return { deleted: true };
     }
   );
 

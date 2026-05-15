@@ -41,6 +41,7 @@ interface PrivateSeedFile {
     passwordHash?: string;
     role: Role;
     staffType: StaffType;
+    isGlobalAdmin?: boolean;
     trainingUnitNames?: string[];
   }>;
   templates?: Array<{
@@ -113,6 +114,7 @@ async function upsertUser(input: {
   passwordHash: string;
   role: Role;
   staffType: StaffType;
+  isGlobalAdmin?: boolean;
 }) {
   const result = await pool.query<{ id: number }>(
     `
@@ -122,16 +124,18 @@ async function upsertUser(input: {
       email,
       password,
       role,
-      staff_type
+      staff_type,
+      is_global_admin
     )
-    VALUES ($1, $2, $3, $4, $5, $6)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
     ON CONFLICT (email) DO UPDATE
     SET
       hospital_id = EXCLUDED.hospital_id,
       name = EXCLUDED.name,
       password = EXCLUDED.password,
       role = EXCLUDED.role,
-      staff_type = EXCLUDED.staff_type
+      staff_type = EXCLUDED.staff_type,
+      is_global_admin = EXCLUDED.is_global_admin
     RETURNING id
     `,
     [
@@ -141,6 +145,7 @@ async function upsertUser(input: {
       input.passwordHash,
       input.role,
       input.staffType,
+      input.isGlobalAdmin ?? false,
     ],
   );
 
@@ -809,6 +814,7 @@ async function seedPrivateOverlay(defaultPasswordHash: string) {
       passwordHash: userPasswordHash,
       role: user.role,
       staffType: user.staffType,
+      isGlobalAdmin: user.isGlobalAdmin ?? false,
     });
 
     userIds.set(user.email, userId);
@@ -998,6 +1004,7 @@ async function seed() {
     passwordHash,
     role: Role.ADMIN,
     staffType: StaffType.TRAINING_COORDINATOR,
+    isGlobalAdmin: true,
   });
 
   const jackCoordinatorId = await upsertUser({
@@ -1007,6 +1014,7 @@ async function seed() {
     passwordHash,
     role: Role.ADMIN,
     staffType: StaffType.TRAINING_COORDINATOR,
+    isGlobalAdmin: false,
   });
 
   const seanTrainerId = await upsertUser({
@@ -1016,6 +1024,7 @@ async function seed() {
     passwordHash,
     role: Role.TRAINER,
     staffType: StaffType.SENIOR_MEDICAL_SCIENTIST,
+    isGlobalAdmin: false,
   });
 
   const ciaraScientistId = await upsertUser({
@@ -1025,6 +1034,7 @@ async function seed() {
     passwordHash,
     role: Role.STAFF,
     staffType: StaffType.BASIC_GRADE_SCIENTIST,
+    isGlobalAdmin: false,
   });
 
   const paulaPoctCoordinatorId = await upsertUser({
@@ -1034,6 +1044,7 @@ async function seed() {
     passwordHash,
     role: Role.ADMIN,
     staffType: StaffType.TRAINING_COORDINATOR,
+    isGlobalAdmin: false,
   });
 
   console.log("Demo users seeded.");
@@ -1104,13 +1115,10 @@ async function seed() {
   });
 
   await Promise.all([
-    assignUserToLab(adminUserId, clinicalBiochemistryUnitId),
-    assignUserToLab(adminUserId, bloodGasUnitId),
     assignUserToLab(paulaPoctCoordinatorId, bloodGasUnitId),
     assignUserToLab(paulaPoctCoordinatorId, glucoseMeterUnitId),
     assignUserToLab(ciaraScientistId, clinicalBiochemistryUnitId),
     assignUserToLab(seanTrainerId, clinicalBiochemistryUnitId),
-    assignUserToLab(adminUserId, immunologyUnitId),
     ...[
       au5800UnitId,
       idsI10UnitId,
@@ -1121,7 +1129,6 @@ async function seed() {
       seniorStaffUnitId,
       trainingCoordinatorUnitId,
     ].flatMap((trainingUnitId) => [
-      assignUserToLab(adminUserId, trainingUnitId),
       assignUserToLab(jackCoordinatorId, trainingUnitId),
       assignUserToLab(seanTrainerId, trainingUnitId),
     ]),

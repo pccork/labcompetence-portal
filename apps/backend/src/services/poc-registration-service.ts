@@ -201,6 +201,24 @@ export async function setPocRegistrationLinkStatus(
   return findPocRegistrationLinkByCode(db, updated.code);
 }
 
+export async function deletePocRegistrationLinkIfUnused(db: Pool, code: string) {
+  const result = await db.query<{ id: number }>(
+    `
+    DELETE FROM poc_registration_links prl
+    WHERE prl.code = $1
+      AND NOT EXISTS (
+        SELECT 1
+        FROM poc_training_requests ptr
+        WHERE ptr.registration_link_id = prl.id
+      )
+    RETURNING prl.id
+    `,
+    [code]
+  );
+
+  return Boolean(result.rows[0]);
+}
+
 export async function registerTraineeFromPocLink(
   db: Pool,
   input: {

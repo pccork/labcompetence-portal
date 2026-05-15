@@ -24,6 +24,7 @@ import {
   CreateDepartmentInput,
   deleteDepartmentRecord,
   deleteLabSection,
+  deletePocRegistrationLink,
   deleteTemplateRecord,
   createPocRegistrationLink,
   createTrainingAssignment,
@@ -57,6 +58,8 @@ import {
   TemplateSummary,
   TrainingAssignmentSummary,
   TrainingRecordSummary,
+  UpdateTrainingAssignmentInput,
+  updateTrainingAssignment,
   updateTemplate,
   UserSummary,
 } from "../features/dashboard/api";
@@ -449,6 +452,13 @@ export function App() {
         await createTrainingAssignment(token, input);
         await loadDashboard(token);
       }}
+      onUpdateAssignment={async (
+        assignmentId: number,
+        input: UpdateTrainingAssignmentInput,
+      ) => {
+        await updateTrainingAssignment(token, assignmentId, input);
+        await loadDashboard(token);
+      }}
       onCreateRecord={async (input: CreateTrainingRecordInput) => {
         await createTrainingRecord(token, input);
         await loadDashboard(token);
@@ -460,6 +470,10 @@ export function App() {
         input: CreatePocRegistrationLinkInput,
       ) => {
         await createPocRegistrationLink(token, input);
+        await loadDashboard(token);
+      }}
+      onDeletePocRegistrationLink={async (code: string) => {
+        await deletePocRegistrationLink(token, code);
         await loadDashboard(token);
       }}
       onReplyToPocRequest={async (requestId, input) => {

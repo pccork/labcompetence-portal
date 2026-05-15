@@ -9,6 +9,7 @@ import {
   CreateTrainingAssignmentInput,
   TemplateSummary,
   TrainingAssignmentSummary,
+  UpdateTrainingAssignmentInput,
   UserSummary,
 } from "../api";
 import { CurrentUser } from "../../auth/api";
@@ -23,9 +24,24 @@ interface TrainingAssignmentsPanelProps {
   users: UserSummary[];
   selectedLabName: string;
   onCreateAssignment: (input: CreateTrainingAssignmentInput) => Promise<void>;
+  onUpdateAssignment: (
+    assignmentId: number,
+    input: UpdateTrainingAssignmentInput
+  ) => Promise<void>;
   showPlanner?: boolean;
   showQueue?: boolean;
 }
+
+type TemplateKindFilter = "all" | "competency_assessment" | "training_event";
+
+const templateKindFilterOptions: Array<{
+  id: TemplateKindFilter;
+  label: string;
+}> = [
+  { id: "all", label: "All" },
+  { id: "competency_assessment", label: "Competency assessment" },
+  { id: "training_event", label: "Training event" },
+];
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("en-IE", {
@@ -48,6 +64,33 @@ function toDueDateIso(value: string) {
   return new Date(`${value}T09:00:00.000Z`).toISOString();
 }
 
+function getTemplateKindLabel(templateKind: string) {
+  if (templateKind === "training_event") {
+    return "Training event";
+  }
+
+  if (templateKind === "competency_assessment") {
+    return "Competency assessment";
+  }
+
+  return templateKind.replaceAll("_", " ");
+}
+
+function getDefaultRenewalInterval(template?: TemplateSummary) {
+  return template?.template_kind === "training_event" ? 0 : 12;
+}
+
+function getRenewalLabel(months: number) {
+  return months === 0 ? "one-off" : `renew every ${months} months`;
+}
+
+function matchesTemplateKindFilter(
+  templateKind: string,
+  filter: TemplateKindFilter
+) {
+  return filter === "all" || templateKind === filter;
+}
+
 export function TrainingAssignmentsPanel({
   currentUser,
   assignments,
@@ -55,6 +98,7 @@ export function TrainingAssignmentsPanel({
   users,
   selectedLabName,
   onCreateAssignment,
+  onUpdateAssignment,
   showPlanner = true,
   showQueue = true,
 }: TrainingAssignmentsPanelProps) {
@@ -77,12 +121,25 @@ export function TrainingAssignmentsPanel({
   const [userId, setUserId] = useState(() => trainableUsers[0]?.id || 1);
   const [templateId, setTemplateId] = useState(() => activeTemplates[0]?.id || 1);
   const [renewalIntervalMonths, setRenewalIntervalMonths] = useState(12);
+  const [plannerTemplateKindFilter, setPlannerTemplateKindFilter] =
+    useState<TemplateKindFilter>("all");
+  const [queueTemplateKindFilter, setQueueTemplateKindFilter] =
+    useState<TemplateKindFilter>("all");
   const [nextDueAt, setNextDueAt] = useState(() =>
     formatForDateInput(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000))
   );
   const [searchTerm, setSearchTerm] = useState("");
+  const [rescheduleDates, setRescheduleDates] = useState<
+    Record<number, string>
+  >({});
   const [formMessage, setFormMessage] = useState<string | null>(null);
+  const [queueMessage, setQueueMessage] = useState<string | null>(null);
+  const [assignmentActionId, setAssignmentActionId] = useState<number | null>(
+    null
+  );
   const [isPending, startTransition] = useTransition();
+  const canUpdateAssignments =
+    currentUser.role === "admin" || currentUser.role === "trainer";
 
   const selectedUser = useMemo(
     () => trainableUsers.find((user) => user.id === userId),
@@ -90,15 +147,27 @@ export function TrainingAssignmentsPanel({
   );
 
   const compatibleTemplates = useMemo(() => {
+    const filteredTemplates = activeTemplates.filter((template) =>
+      matchesTemplateKindFilter(
+        template.template_kind,
+        plannerTemplateKindFilter
+      )
+    );
+
     if (!selectedUser) {
-      return activeTemplates;
+      return filteredTemplates;
     }
 
-    return activeTemplates.filter(
+    return filteredTemplates.filter(
       (template) =>
         template.target_staff_type === selectedUser.staff_type
     );
-  }, [activeTemplates, selectedUser]);
+  }, [activeTemplates, plannerTemplateKindFilter, selectedUser]);
+
+  const selectedTemplate = useMemo(
+    () => compatibleTemplates.find((template) => template.id === templateId),
+    [compatibleTemplates, templateId]
+  );
 
   useEffect(() => {
     const firstUser = trainableUsers[0];
@@ -116,6 +185,7 @@ export function TrainingAssignmentsPanel({
       !compatibleTemplates.some((template) => template.id === templateId)
     ) {
       setTemplateId(firstTemplate.id);
+      setRenewalIntervalMonths(getDefaultRenewalInterval(firstTemplate));
     }
   }, [compatibleTemplates, templateId]);
 
@@ -124,6 +194,15 @@ export function TrainingAssignmentsPanel({
 
     return [...assignments]
       .filter((assignment) => {
+        if (
+          !matchesTemplateKindFilter(
+            assignment.template_kind,
+            queueTemplateKindFilter
+          )
+        ) {
+          return false;
+        }
+
         if (!normalizedSearchTerm) {
           return true;
         }
@@ -135,7 +214,7 @@ export function TrainingAssignmentsPanel({
       .sort((left, right) =>
         left.next_due_at.localeCompare(right.next_due_at)
       );
-  }, [assignments, searchTerm]);
+  }, [assignments, queueTemplateKindFilter, searchTerm]);
 
   const assignmentReportRows = useMemo(
     () =>
@@ -144,9 +223,10 @@ export function TrainingAssignmentsPanel({
         assignment.trainee_email,
         assignment.staff_type.replaceAll("_", " "),
         assignment.template_name,
+        getTemplateKindLabel(assignment.template_kind),
         `${assignment.department_name} / ${assignment.lab_name}`,
         formatDate(assignment.next_due_at),
-        assignment.renewal_interval_months,
+        getRenewalLabel(assignment.renewal_interval_months),
         getDaysUntil(assignment.next_due_at),
         assignment.assigned_by_name,
       ]),
@@ -158,12 +238,63 @@ export function TrainingAssignmentsPanel({
     "Email",
     "Staff type",
     "Template",
+    "Template type",
     "Section",
     "Next due date",
-    "Renewal months",
+    "Renewal",
     "Days remaining",
     "Assigned by",
   ];
+
+  const renderTemplateKindFilterButtons = (
+    value: TemplateKindFilter,
+    onChange: (nextValue: TemplateKindFilter) => void,
+    label: string
+  ) => (
+    <div className="field">
+      <label className="label">{label}</label>
+      <div className="buttons has-addons">
+        {templateKindFilterOptions.map((option) => (
+          <button
+            className={`button is-small ${
+              value === option.id ? "is-link" : "is-light"
+            }`}
+            key={option.id}
+            onClick={() => onChange(option.id)}
+            type="button"
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const updateAssignment = (
+    assignment: TrainingAssignmentSummary,
+    input: UpdateTrainingAssignmentInput,
+    successMessage: string
+  ) => {
+    setQueueMessage(null);
+    setAssignmentActionId(assignment.id);
+
+    startTransition(() => {
+      void onUpdateAssignment(assignment.id, input)
+        .then(() => {
+          setQueueMessage(successMessage);
+        })
+        .catch((error) => {
+          setQueueMessage(
+            error instanceof Error
+              ? error.message
+              : "Unable to update training assignment"
+          );
+        })
+        .finally(() => {
+          setAssignmentActionId(null);
+        });
+    });
+  };
 
   return (
     <section className="columns is-multiline">
@@ -246,6 +377,12 @@ export function TrainingAssignmentsPanel({
               </div>
             </div>
 
+            {renderTemplateKindFilterButtons(
+              plannerTemplateKindFilter,
+              setPlannerTemplateKindFilter,
+              "Template type"
+            )}
+
             <div className="field">
               <label className="label" htmlFor="assignment-template">
                 Template
@@ -254,14 +391,22 @@ export function TrainingAssignmentsPanel({
                 <select
                   id="assignment-template"
                   value={templateId}
-                  onChange={(event) =>
-                    setTemplateId(Number(event.target.value))
-                  }
+                  onChange={(event) => {
+                    const nextTemplateId = Number(event.target.value);
+                    const nextTemplate = compatibleTemplates.find(
+                      (template) => template.id === nextTemplateId
+                    );
+
+                    setTemplateId(nextTemplateId);
+                    setRenewalIntervalMonths(
+                      getDefaultRenewalInterval(nextTemplate)
+                    );
+                  }}
                 >
                   {compatibleTemplates.map((template) => (
                     <option key={template.id} value={template.id}>
-                      {template.name} · {template.department_name} /{" "}
-                      {template.lab_name}
+                      {template.name} · {getTemplateKindLabel(template.template_kind)} ·{" "}
+                      {template.department_name} / {template.lab_name}
                     </option>
                   ))}
                 </select>
@@ -277,7 +422,7 @@ export function TrainingAssignmentsPanel({
                   id="assignment-renewal"
                   className="input"
                   type="number"
-                  min="1"
+                  min="0"
                   value={renewalIntervalMonths}
                   onChange={(event) =>
                     setRenewalIntervalMonths(Number(event.target.value))
@@ -301,7 +446,16 @@ export function TrainingAssignmentsPanel({
 
             {selectedUser ? (
               <p className="mini-note">
-                Showing templates for {selectedUser.staff_type.replaceAll("_", " ")}.
+                Showing {plannerTemplateKindFilter === "all"
+                  ? "all template types"
+                  : getTemplateKindLabel(plannerTemplateKindFilter)} for{" "}
+                {selectedUser.staff_type.replaceAll("_", " ")}.
+                {selectedTemplate ? (
+                  <>
+                    {" "}
+                    Selected template is {getRenewalLabel(renewalIntervalMonths)}.
+                  </>
+                ) : null}
               </p>
             ) : null}
 
@@ -368,6 +522,12 @@ export function TrainingAssignmentsPanel({
               : selectedLabName}
           </p>
 
+          {renderTemplateKindFilterButtons(
+            queueTemplateKindFilter,
+            setQueueTemplateKindFilter,
+            "Queue type"
+          )}
+
           <div className="field">
             <label className="label" htmlFor="assignment-search">
               Search assignments
@@ -382,6 +542,8 @@ export function TrainingAssignmentsPanel({
             />
           </div>
 
+          {queueMessage ? <p className="mini-note">{queueMessage}</p> : null}
+
           <div className="scroll-list assignment-list">
             {visibleAssignments.length === 0 ? (
               <p className="empty-state">
@@ -390,6 +552,11 @@ export function TrainingAssignmentsPanel({
             ) : (
               visibleAssignments.map((assignment) => {
                 const daysLeft = getDaysUntil(assignment.next_due_at);
+                const rescheduleDate =
+                  rescheduleDates[assignment.id] ||
+                  formatForDateInput(new Date(assignment.next_due_at));
+                const isActionPending =
+                  isPending && assignmentActionId === assignment.id;
 
                 return (
                   <article className="list-card" key={assignment.id}>
@@ -397,15 +564,101 @@ export function TrainingAssignmentsPanel({
                       <h3 className="list-title">{assignment.template_name}</h3>
                       <p className="list-meta">
                         {assignment.trainee_name} ·{" "}
+                        {getTemplateKindLabel(assignment.template_kind)} ·{" "}
                         {assignment.department_name} /{" "}
                         {assignment.lab_name} ·{" "}
                         {assignment.staff_type.replaceAll("_", " ")}
                       </p>
                       <p className="mini-note">
-                        Due {formatDate(assignment.next_due_at)} · renew every{" "}
-                        {assignment.renewal_interval_months} months ·{" "}
+                        Due {formatDate(assignment.next_due_at)} ·{" "}
+                        {getRenewalLabel(assignment.renewal_interval_months)} ·{" "}
                         {assignment.trainee_email}
                       </p>
+                      {canUpdateAssignments ? (
+                        <div className="field has-addons mt-3">
+                          <p className="control">
+                            <input
+                              aria-label={`Reschedule ${assignment.template_name}`}
+                              className="input is-small"
+                              disabled={isActionPending}
+                              type="date"
+                              value={rescheduleDate}
+                              onChange={(event) =>
+                                setRescheduleDates((currentDates) => ({
+                                  ...currentDates,
+                                  [assignment.id]: event.target.value,
+                                }))
+                              }
+                            />
+                          </p>
+                          <p className="control">
+                            <button
+                              className={`button is-small is-link ${
+                                isActionPending ? "is-loading" : ""
+                              }`}
+                              disabled={isActionPending || !rescheduleDate}
+                              onClick={() => {
+                                const confirmed = confirmManagedAction(
+                                  currentUser,
+                                  `Reschedule "${assignment.template_name}" for ${assignment.trainee_name} to ${formatDate(toDueDateIso(rescheduleDate))}?`,
+                                  "Please confirm again to reschedule this training assignment."
+                                );
+
+                                if (!confirmed) {
+                                  return;
+                                }
+
+                                updateAssignment(
+                                  assignment,
+                                  {
+                                    renewalIntervalMonths:
+                                      assignment.renewal_interval_months,
+                                    nextDueAt: toDueDateIso(rescheduleDate),
+                                    isActive: true,
+                                  },
+                                  "Training assignment rescheduled."
+                                );
+                              }}
+                              type="button"
+                            >
+                              Reschedule
+                            </button>
+                          </p>
+                          <p className="control">
+                            <button
+                              className={`button is-small is-danger is-light ${
+                                isActionPending ? "is-loading" : ""
+                              }`}
+                              disabled={isActionPending}
+                              onClick={() => {
+                                const confirmed = confirmManagedAction(
+                                  currentUser,
+                                  `Delete "${assignment.template_name}" from ${assignment.trainee_name}'s queue?`,
+                                  "Please confirm again to remove this scheduled assignment."
+                                );
+
+                                if (!confirmed) {
+                                  return;
+                                }
+
+                                updateAssignment(
+                                  assignment,
+                                  {
+                                    renewalIntervalMonths:
+                                      assignment.renewal_interval_months,
+                                    nextDueAt: assignment.next_due_at,
+                                    isActive: false,
+                                  },
+                                  "Training assignment removed from the queue."
+                                );
+                              }}
+                              type="button"
+                            >
+                              Delete
+                            </button>
+                          </p>
+                        </div>
+                      ) : null}
                     </div>
 
                     <span

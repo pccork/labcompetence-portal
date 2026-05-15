@@ -108,6 +108,7 @@ const templateRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.db,
         resolveScopedHospitalId(scope),
         scope.canAccessAllHospitals ? undefined : scope.trainingUnitIds,
+        request.user.role === Role.STAFF ? Number(request.user.id) : undefined,
       );
 
       return { templates };

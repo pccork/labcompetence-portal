@@ -87,6 +87,7 @@ export interface TrainingAssignmentSummary {
   staff_type: string;
   template_id: number;
   template_name: string;
+  template_kind: string;
   lab_id: number;
   lab_name: string;
   department_id: number;
@@ -155,6 +156,12 @@ export interface CreateTrainingAssignmentInput {
   templateId: number;
   renewalIntervalMonths: number;
   nextDueAt: string;
+}
+
+export interface UpdateTrainingAssignmentInput {
+  renewalIntervalMonths: number;
+  nextDueAt: string;
+  isActive: boolean;
 }
 
 export interface CreateTrainingRecordInput {
@@ -515,6 +522,21 @@ export async function createTrainingAssignment(
   );
 }
 
+export async function updateTrainingAssignment(
+  token: string,
+  assignmentId: number,
+  input: UpdateTrainingAssignmentInput
+) {
+  return apiRequest<{ assignment: TrainingAssignmentSummary }>(
+    `/training-assignments/${assignmentId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    },
+    token
+  );
+}
+
 export async function fetchTrainingRecords(token: string) {
   return apiRequest<{ records: TrainingRecordSummary[] }>(
     "/training-records",
@@ -565,6 +587,16 @@ export async function createPocRegistrationLink(
     {
       method: "POST",
       body: JSON.stringify(input),
+    },
+    token
+  );
+}
+
+export async function deletePocRegistrationLink(token: string, code: string) {
+  return apiRequest<{ deleted: boolean }>(
+    `/poc/registration-links/${code}`,
+    {
+      method: "DELETE",
     },
     token
   );

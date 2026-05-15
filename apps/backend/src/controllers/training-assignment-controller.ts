@@ -78,7 +78,7 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.db,
         resolveScopedHospitalId(scope),
         scope.canAccessCrossHospitalPoc,
-        scope.trainingUnitIds,
+        request.user.role === Role.STAFF ? undefined : scope.trainingUnitIds,
       );
 
       return {
@@ -123,7 +123,7 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
         days,
         resolveScopedHospitalId(scope),
         scope.canAccessCrossHospitalPoc,
-        scope.trainingUnitIds,
+        request.user.role === Role.STAFF ? undefined : scope.trainingUnitIds,
       );
 
       return {
@@ -162,10 +162,10 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (
         !Number.isInteger(renewalIntervalMonths) ||
-        renewalIntervalMonths <= 0
+        renewalIntervalMonths < 0
       ) {
         return reply.status(400).send({
-          message: "Valid renewalIntervalMonths is required",
+          message: "renewalIntervalMonths must be zero or greater",
         });
       }
 
@@ -307,7 +307,10 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.patch<TrainingAssignmentParams & UpdateTrainingAssignmentBody>(
     "/training-assignments/:id",
     {
-      preHandler: [fastify.authenticate, fastify.requireRole(Role.ADMIN)],
+      preHandler: [
+        fastify.authenticate,
+        fastify.requireAnyRole([Role.ADMIN, Role.TRAINER]),
+      ],
     },
     async (request, reply) => {
       const assignmentId = Number(request.params.id);
@@ -323,10 +326,10 @@ const trainingAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (
         !Number.isInteger(renewalIntervalMonths) ||
-        renewalIntervalMonths <= 0
+        renewalIntervalMonths < 0
       ) {
         return reply.status(400).send({
-          message: "Valid renewalIntervalMonths is required",
+          message: "renewalIntervalMonths must be zero or greater",
         });
       }
 

@@ -58,11 +58,6 @@ const templateKindLabels = new Map([
 
 const templateLibraryFilterOptions = [
   {
-    value: "all",
-    label: "All",
-    description: "Training events and competency assessments",
-  },
-  {
     value: "training_event",
     label: "Training Events",
     description: "Initial staff training records",
@@ -146,7 +141,8 @@ export function TemplatesPanel({
   ]);
   const [showGeneratedSchema, setShowGeneratedSchema] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [templateLibraryFilter, setTemplateLibraryFilter] = useState("all");
+  const [templateLibraryFilter, setTemplateLibraryFilter] =
+    useState("training_event");
   const [formMessage, setFormMessage] = useState<string | null>(null);
   const [printMessage, setPrintMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -175,11 +171,7 @@ export function TemplatesPanel({
     const normalizedSearchTerm = searchTerm.trim().toLowerCase();
 
     return [...splitTemplates]
-      .filter(
-        (template) =>
-          templateLibraryFilter === "all" ||
-          template.template_kind === templateLibraryFilter,
-      )
+      .filter((template) => template.template_kind === templateLibraryFilter)
       .filter((template) => {
         if (!normalizedSearchTerm) {
           return true;
@@ -212,7 +204,6 @@ export function TemplatesPanel({
 
   const libraryFilterCounts = useMemo(
     () => ({
-      all: splitTemplates.length,
       training_event: splitTemplates.filter(
         (template) => template.template_kind === "training_event",
       ).length,
