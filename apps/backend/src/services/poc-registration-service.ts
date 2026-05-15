@@ -492,7 +492,7 @@ export async function listPocTrainingRequestRecipients(
 ) {
   const result = await db.query<PocTrainingRequestRecipient>(
     `
-    SELECT DISTINCT
+    SELECT
       u.id,
       u.name,
       u.email,
@@ -503,6 +503,7 @@ export async function listPocTrainingRequestRecipients(
     WHERE ptr.id = $1
       AND u.is_active = true
       AND u.role IN ($2, $3)
+    GROUP BY u.id, u.name, u.email, u.role
     ORDER BY
       CASE WHEN u.role = $2 THEN 0 ELSE 1 END,
       u.name ASC
