@@ -7,11 +7,30 @@ interface DashboardMetric {
 
 interface DashboardMetricsProps {
   metrics: DashboardMetric[];
+  variant?: "cards" | "compact";
 }
 
 export function DashboardMetrics({
   metrics,
+  variant = "cards",
 }: DashboardMetricsProps) {
+  if (variant === "compact") {
+    return (
+      <section className="metric-strip" aria-label="Dashboard summary">
+        {metrics.map((metric) => (
+          <article
+            className={`metric-strip-item ${metric.accent ? "accent" : ""}`}
+            key={metric.label}
+          >
+            <span className="metric-strip-label">{metric.label}</span>
+            <strong className="metric-strip-value">{metric.value}</strong>
+            <span className="metric-strip-helper">{metric.helper}</span>
+          </article>
+        ))}
+      </section>
+    );
+  }
+
   return (
     <section className="columns is-multiline">
       {metrics.map((metric) => (

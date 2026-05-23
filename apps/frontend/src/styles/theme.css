@@ -177,6 +177,64 @@ body {
   color: white;
 }
 
+.metric-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+  border: 1px solid var(--portal-border);
+  border-radius: 18px;
+  background: var(--portal-card);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
+}
+
+.metric-strip-item {
+  display: grid;
+  grid-template-columns: auto minmax(4.5rem, auto);
+  grid-template-areas:
+    "label value"
+    "helper value";
+  column-gap: 0.85rem;
+  align-items: center;
+  min-width: 0;
+  padding: 1rem 1.15rem;
+  border-right: 1px solid var(--portal-border);
+}
+
+.metric-strip-item:last-child {
+  border-right: 0;
+}
+
+.metric-strip-item.accent {
+  background: rgba(15, 118, 110, 0.09);
+}
+
+.metric-strip-label {
+  grid-area: label;
+  color: var(--portal-sea);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.metric-strip-value {
+  grid-area: value;
+  color: var(--portal-ink);
+  font-size: 2.15rem;
+  font-weight: 800;
+  line-height: 1;
+  text-align: right;
+}
+
+.metric-strip-helper {
+  grid-area: helper;
+  color: var(--portal-slate);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
 .metric-value {
   color: var(--portal-ink);
   font-size: clamp(3rem, 8vw, 4.8rem);
@@ -991,9 +1049,19 @@ body {
   .poct-hero-layout,
   .poct-hero-badges,
   .poct-stat-row,
+  .metric-strip,
   .poc-register-layout,
   .request-filter-grid {
     grid-template-columns: 1fr;
+  }
+
+  .metric-strip-item {
+    border-right: 0;
+    border-bottom: 1px solid var(--portal-border);
+  }
+
+  .metric-strip-item:last-child {
+    border-bottom: 0;
   }
 
   .panel-heading-row {

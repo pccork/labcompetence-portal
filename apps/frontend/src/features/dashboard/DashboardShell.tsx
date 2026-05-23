@@ -447,7 +447,10 @@ export function DashboardShell({
           <div className="notification is-danger is-light">{errorMessage}</div>
         ) : null}
 
-        <DashboardMetrics metrics={dashboardMetrics} />
+        <DashboardMetrics
+          metrics={dashboardMetrics}
+          variant={showPoctCoordinatorDashboard ? "compact" : "cards"}
+        />
 
         {activeView === "overview" ? (
           currentUser.is_global_admin ? (
